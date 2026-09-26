@@ -7,12 +7,16 @@ server's naming policy. Times are UTC ISO 8601.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /CableTv/Channels` | Channel list: id, number, name, logo, `scheduleVersion`, `poolSize` |
+| `GET /CableTv/Channels` | Channel list: id, number, name, `logoUrl` (absolute URL of `/CableTv/Logo/{id}`), `category`, `scheduleVersion`, `poolSize` |
+| `GET /CableTv/Logo/{channelId}` | Anonymous: the channel's logo image (or a redirect to it) |
 | `GET /CableTv/Schedule?channelIds=&from=&to=` | Resolved slots for a window, with `serverTime` |
 | `GET /CableTv/Now?channelId=&next=3` | Airing slot, the offset to start at, and the next slots to preload |
 | `GET /CableTv/Presentation` | Server-set branding |
 | `POST /CableTv/Rebuild` | Admin only: re-read pools from the library and refresh the Live TV guide |
 | `POST /CableTv/Preview?hours=6` | Admin only: body is a channel definition (unsaved); returns the coming slots |
+| `GET /CableTv/Suggestions?minTitles=3` | Admin only: channels the library could fill (networks, genres, decades, kids, holidays, collections), as ready-to-add channel definitions |
+| `POST /CableTv/Import` | Admin only: body `{ content, mode: Merge\|Replace\|Season, seasonName, from, to, seasonMode, targetChannelId, apply }`; returns a per-channel report of matched and missing titles; saves only with `apply: true` |
+| `GET /CableTv/Export?format=json\|csv&channelIds=` | Admin only: a JSON channel pack or a lineup CSV |
 | `GET /CableTv/Stream/{channelId}?key=` | Internal: the continuous MPEG-TS stream Jellyfin's Live TV reads; authenticated by the plugin's stream key, not for clients |
 
 ## `GET /CableTv/Schedule`

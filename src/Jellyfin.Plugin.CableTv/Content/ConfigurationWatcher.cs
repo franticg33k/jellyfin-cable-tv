@@ -86,7 +86,7 @@ public sealed class ConfigurationWatcher : IHostedService, IDisposable
     {
         try
         {
-            _refresher.RebuildAndRefreshGuide();
+            _refresher.RequestRebuild();
         }
         catch (Exception ex)
         {

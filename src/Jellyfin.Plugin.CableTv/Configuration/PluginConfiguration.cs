@@ -51,4 +51,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// "America/New_York". Empty for the server's time zone.
     /// </summary>
     public string TimeZone { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets an optional logo pack: a base URL where logos are found by channel name, as
+    /// "{LogoBaseUrl}/{slug}.png" (for example "cartoon_network.png"). Channels whose logo isn't set use it first.
+    /// </summary>
+    public string LogoBaseUrl { get; set; } = string.Empty;
 }
