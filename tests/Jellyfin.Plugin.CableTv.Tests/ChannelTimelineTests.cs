@@ -50,7 +50,7 @@ public class ChannelTimelineTests
 
         Assert.Equal(
             ["Item 1", "Item 2", "Item 3", "Item 1", "Item 2", "Item 3"],
-            slots.Select(s => s.Item.Title));
+            slots.Select(s => s.Item!.Title));
         Assert.Equal(Anchor, slots[0].StartUtc);
         Assert.Equal(Anchor.AddMinutes(60), slots[3].StartUtc);
     }
@@ -105,8 +105,8 @@ public class ChannelTimelineTests
         var from = new DateTime(2026, 9, 26, 0, 0, 0, DateTimeKind.Utc);
         var pool = Pool(22, 44, 23, 90, 7, 30, 11, 60, 25, 25);
 
-        var a = new ChannelTimeline("ch-a", ChannelSorting.Random, Anchor, pool).GetSlots(from, from.AddDays(1)).Select(s => s.Item.ItemId);
-        var b = new ChannelTimeline("ch-b", ChannelSorting.Random, Anchor, pool).GetSlots(from, from.AddDays(1)).Select(s => s.Item.ItemId);
+        var a = new ChannelTimeline("ch-a", ChannelSorting.Random, Anchor, pool).GetSlots(from, from.AddDays(1)).Select(s => s.Item!.ItemId);
+        var b = new ChannelTimeline("ch-b", ChannelSorting.Random, Anchor, pool).GetSlots(from, from.AddDays(1)).Select(s => s.Item!.ItemId);
 
         Assert.NotEqual(a, b);
     }
@@ -123,7 +123,7 @@ public class ChannelTimelineTests
             var start = Anchor + (cycle * k);
             var slots = timeline.GetSlots(start, start + cycle).ToList();
             Assert.Equal(pool.Count, slots.Count);
-            Assert.Equal(pool.Select(p => p.ItemId).Order(), slots.Select(s => s.Item.ItemId).Order());
+            Assert.Equal(pool.Select(p => p.ItemId).Order(), slots.Select(s => s.Item!.ItemId).Order());
             Assert.Equal(start, slots[0].StartUtc);
         }
     }
@@ -137,7 +137,7 @@ public class ChannelTimelineTests
 
         for (var i = 1; i < slots.Count; i++)
         {
-            Assert.NotEqual(slots[i - 1].Item.ItemId, slots[i].Item.ItemId);
+            Assert.NotEqual(slots[i - 1].Item!.ItemId, slots[i].Item!.ItemId);
         }
     }
 
@@ -163,7 +163,7 @@ public class ChannelTimelineTests
         var slot = timeline.GetSlotAt(Anchor.AddMinutes(-10));
 
         Assert.NotNull(slot);
-        Assert.Equal("Item 2", slot.Item.Title);
+        Assert.Equal("Item 2", slot.Item!.Title);
         Assert.Equal(Anchor.AddMinutes(-30), slot.StartUtc);
     }
 

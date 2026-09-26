@@ -12,6 +12,8 @@ server's naming policy. Times are UTC ISO 8601.
 | `GET /CableTv/Now?channelId=&next=3` | Airing slot, the offset to start at, and the next slots to preload |
 | `GET /CableTv/Presentation` | Server-set branding |
 | `POST /CableTv/Rebuild` | Admin only: re-read pools from the library and refresh the Live TV guide |
+| `POST /CableTv/Preview?hours=6` | Admin only: body is a channel definition (unsaved); returns the coming slots |
+| `GET /CableTv/Stream/{channelId}?key=` | Internal: the continuous MPEG-TS stream Jellyfin's Live TV reads; authenticated by the plugin's stream key, not for clients |
 
 ## `GET /CableTv/Schedule`
 
@@ -65,7 +67,11 @@ server's naming policy. Times are UTC ISO 8601.
 ## Rules
 
 - `kind` is one of `program`, `commercial`, `bumper`, `filler`, `stream` (outside HLS/TS URL) or
-  `generated` (for example weather). v1 emits only `program`; clients must skip kinds they don't know.
+  `generated` (for example weather). The plugin currently emits `program`, `commercial` and `filler`;
+  clients must skip kinds they don't know.
+- `filler` has no item: render static or black for its duration (it pads a break to the grid).
+- Fields that are null are omitted from the JSON (Jellyfin's serializer), for example `itemId` and `title`
+  on filler and `episode` on movies.
 - `guideGroup` ties breaks to their programme, so a guide shows one block and the player sees every item.
 - A mid-show break splits a programme into two `program` slots on the same `itemId` with different in/out points.
 - Clients compute "now" as `serverTime` plus elapsed device time, never from the device clock alone.
@@ -76,10 +82,18 @@ server's naming policy. Times are UTC ISO 8601.
 
 ## How the schedule is computed
 
+Each pool item airs as a *block*: the programme (split at the halfway point or the chapter nearest it when
+mid-breaks are on), its breaks, and filler up to the grid (`GridMinutes`), or fixed `BreakSeconds` breaks when
+there is no grid. A block's length depends only on its item; which commercials fill a break is drawn from a
+generator seeded by the block id. Each block is one Live TV guide entry.
+
 Each channel's timeline is a pure function of wall-clock time: time since the anchor
 (`ScheduleAnchorUtc`, or the channel's own `AnchorUtc`) is cut into cycles as long as the whole pool. Each
-cycle plays every item once, in canonical order (`Cyclic`) or in a shuffle seeded by the channel id and the
-cycle number (`Random`). Nothing is stored, so restarts and multiple servers agree, and Live TV's guide
+cycle plays every item once, in an order set by `Sorting`: `Random` (a shuffle seeded by the channel id and
+cycle number; a source's `Weight` makes its items air that many times per cycle, never back to back when
+avoidable), `Cyclic` (canonical order), `RoundRobin` (one episode per series in turn), `Block`
+(`BlockSize` episodes per series in turn) or `Marathon` (series back to back, series order reshuffled
+each cycle). Nothing is stored, so restarts and multiple servers agree, and Live TV's guide
 matches what the API returns.
 
 Pools are re-read from the library only on a rebuild (saving the configuration, the daily

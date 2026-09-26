@@ -5,7 +5,11 @@
   <title>Cable TV</title>
 </head>
 <body>
-  <div id="CableTvConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-textarea">
+  <div id="CableTvConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-textarea,emby-select,emby-checkbox">
+    <style>
+      #CableTvConfigPage .cabletv-json { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 0.9em; }
+      #CableTvConfigPage .cabletv-pre { white-space: pre-wrap; font-family: monospace; font-size: 0.85em; opacity: 0.85; margin: 0.5em 0 1em; }
+    </style>
     <div data-role="content">
       <div class="content-primary">
         <h2 class="sectionTitle">Cable TV</h2>
@@ -18,16 +22,53 @@
             <div class="fieldDescription">Every schedule is computed from this instant. Changing it reshuffles all channels.</div>
           </div>
 
+          <h3 class="sectionTitle">Live TV stream</h3>
+          <div class="selectContainer">
+            <label class="selectLabel" for="FallbackMode">Stream mode</label>
+            <select is="emby-select" id="FallbackMode" name="FallbackMode" class="emby-select-withcolor emby-select">
+              <option value="Auto">Auto: copy video in the channel's main format, transcode the rest</option>
+              <option value="Copy">Copy: never transcode video (cheapest)</option>
+              <option value="Transcode">Transcode: always H.264 at a fixed size (most compatible)</option>
+              <option value="Off">Off: play the airing file from its start</option>
+            </select>
+            <div class="fieldDescription">How Live TV apps receive channels. Audio is always converted to AAC stereo.</div>
+          </div>
+          <div class="inputContainer">
+            <label class="inputLabel inputLabelUnfocused" for="TranscodeHeight">Transcode height</label>
+            <input id="TranscodeHeight" name="TranscodeHeight" type="number" is="emby-input" min="240" max="2160" />
+            <div class="fieldDescription">Frame height when the stream transcodes, for example 720 or 1080.</div>
+          </div>
+          <div class="checkboxContainer checkboxContainer-withDescription">
+            <label class="emby-checkbox-label">
+              <input id="NormalizeLoudness" name="NormalizeLoudness" type="checkbox" is="emby-checkbox" />
+              <span>Level loudness</span>
+            </label>
+            <div class="fieldDescription checkboxFieldDescription">Evens out volume between programmes and commercials.</div>
+          </div>
+
+          <h3 class="sectionTitle">Commercials</h3>
+          <div class="inputContainer">
+            <label class="textareaLabel" for="CommercialSourcesJson">Commercial sources (JSON)</label>
+            <textarea id="CommercialSourcesJson" is="emby-textarea" rows="5" spellcheck="false" class="cabletv-json"></textarea>
+            <div class="fieldDescription">
+              Used by channels with <code>CommercialsEnabled</code> that don't set their own <code>CommercialSources</code>.
+              For example <code>[{"Type": "Library", "Ids": ["&lt;library id&gt;"], "Values": []}]</code>.
+            </div>
+          </div>
+
           <h3 class="sectionTitle">Channels</h3>
-          <div id="ChannelSummary" class="fieldDescription"></div>
+          <pre id="ChannelSummary" class="cabletv-pre"></pre>
 
           <div class="inputContainer">
             <label class="textareaLabel" for="ChannelsJson">Channels (JSON)</label>
-            <textarea id="ChannelsJson" is="emby-textarea" rows="20" spellcheck="false" style="font-family: monospace;"></textarea>
+            <textarea id="ChannelsJson" is="emby-textarea" rows="20" spellcheck="false" class="cabletv-json"></textarea>
             <div class="fieldDescription">
-              A list of channels. <code>Sorting</code> is <code>Random</code> or <code>Cyclic</code>.
-              Source <code>Type</code> is <code>Library</code>, <code>Collection</code>, <code>Playlist</code>, <code>Items</code> (use <code>Ids</code>),
+              A list of channels. Source <code>Type</code> is <code>Library</code>, <code>Collection</code>, <code>Playlist</code>, <code>Items</code> (use <code>Ids</code>),
               <code>Genre</code> or <code>Decade</code> (use <code>Values</code>, e.g. <code>["Comedy"]</code> or <code>["1990"]</code>).
+              <code>Sorting</code> is <code>Random</code>, <code>Cyclic</code>, <code>RoundRobin</code>, <code>Block</code> (with <code>BlockSize</code>) or <code>Marathon</code>;
+              a source's <code>Weight</code> (1–10) makes its items air more often under <code>Random</code>.
+              Breaks: <code>CommercialsEnabled</code>, <code>GridMinutes</code> (pad each programme to e.g. 30), <code>MidBreak</code>
+              (<code>None</code>, <code>Halfway</code>, <code>Chapter</code>) and <code>BreakSeconds</code> (break length when there's no grid).
             </div>
             <div id="JsonError" class="fieldDescription" style="color: #e57373;"></div>
           </div>
@@ -39,9 +80,18 @@
           </div>
         </form>
 
+        <h3 class="sectionTitle">Preview</h3>
+        <p class="fieldDescription">Shows what a channel would air from now, using the settings in the box above, before you save.</p>
+        <div class="selectContainer">
+          <label class="selectLabel" for="PreviewChannel">Channel</label>
+          <select is="emby-select" id="PreviewChannel" class="emby-select-withcolor emby-select"></select>
+        </div>
+        <button is="emby-button" type="button" id="PreviewButton" class="raised button-alt block"><span>Preview next 6 hours</span></button>
+        <pre id="PreviewResult" class="cabletv-pre"></pre>
+
         <h3 class="sectionTitle">Find ids</h3>
         <p class="fieldDescription">Libraries, collections and playlists on this server, for use in <code>Ids</code>.</p>
-        <div id="IdLookup" class="fieldDescription" style="font-family: monospace; white-space: pre-wrap;"></div>
+        <pre id="IdLookup" class="cabletv-pre"></pre>
       </div>
     </div>
 
@@ -61,8 +111,14 @@
             Sorting: 'Random',
             ItemTypes: ['Episode', 'Movie'],
             AllowSpecials: false,
-            Sources: [{ Type: 'Genre', Ids: [], Values: ['Comedy'] }],
-            AnchorUtc: null
+            BlockSize: 3,
+            Sources: [{ Type: 'Genre', Ids: [], Values: ['Comedy'], Weight: 1 }],
+            AnchorUtc: null,
+            CommercialsEnabled: false,
+            GridMinutes: 30,
+            MidBreak: 'Halfway',
+            BreakSeconds: 120,
+            CommercialSources: []
           };
         }
 
@@ -85,13 +141,33 @@
           }
         }
 
+        function refreshPreviewChoices() {
+          var select = page.querySelector('#PreviewChannel');
+          var channels;
+          try { channels = JSON.parse(page.querySelector('#ChannelsJson').value || '[]'); } catch (e) { return; }
+          if (!Array.isArray(channels)) { return; }
+          var current = select.value;
+          select.innerHTML = '';
+          channels.forEach(function (c, i) {
+            var option = document.createElement('option');
+            option.value = String(i);
+            option.textContent = (c.Number || '') + '  ' + (c.Name || c.Id || ('Channel ' + (i + 1)));
+            select.appendChild(option);
+          });
+          if (current && Number(current) < channels.length) { select.value = current; }
+        }
+
+        function time(iso) {
+          var d = new Date(iso);
+          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
         function loadSummary() {
           ApiClient.fetch({ url: ApiClient.getUrl('CableTv/Channels'), type: 'GET', dataType: 'json' }).then(function (r) {
             var el = page.querySelector('#ChannelSummary');
             el.textContent = r.channels.length === 0
               ? 'No channels are live yet.'
               : r.channels.map(function (c) { return c.number + '  ' + c.name + ' — ' + c.poolSize + ' items'; }).join('\n');
-            el.style.whiteSpace = 'pre-wrap';
           });
         }
 
@@ -114,10 +190,45 @@
           ApiClient.getPluginConfiguration(pluginId).then(function (config) {
             page.querySelector('#ScheduleAnchorUtc').value = config.ScheduleAnchorUtc;
             page.querySelector('#ChannelsJson').value = JSON.stringify(config.Channels || [], null, 2);
+            page.querySelector('#CommercialSourcesJson').value = JSON.stringify(config.CommercialSources || [], null, 2);
+            page.querySelector('#FallbackMode').value = config.FallbackMode || 'Auto';
+            page.querySelector('#TranscodeHeight').value = config.TranscodeHeight || 720;
+            page.querySelector('#NormalizeLoudness').checked = config.NormalizeLoudness !== false;
+            refreshPreviewChoices();
             Dashboard.hideLoadingMsg();
           });
           loadSummary();
           loadIds();
+        });
+
+        page.querySelector('#ChannelsJson').addEventListener('change', refreshPreviewChoices);
+
+        page.querySelector('#PreviewButton').addEventListener('click', function () {
+          var channels = parseChannels();
+          var out = page.querySelector('#PreviewResult');
+          if (!channels || channels.length === 0) { out.textContent = 'Add a channel first.'; return; }
+          var channel = channels[Number(page.querySelector('#PreviewChannel').value) || 0];
+          out.textContent = 'Working…';
+          ApiClient.fetch({
+            url: ApiClient.getUrl('CableTv/Preview', { hours: 6 }),
+            type: 'POST',
+            data: JSON.stringify(channel),
+            contentType: 'application/json',
+            dataType: 'json'
+          }).then(function (r) {
+            if (r.poolSize === 0) { out.textContent = 'The sources matched nothing playable.'; return; }
+            var lines = [r.poolSize + ' items, one pass takes ' + r.cycleHours.toFixed(1) + ' h', ''];
+            var shown = r.slots.slice(0, 80);
+            shown.forEach(function (s) {
+              var label = s.kind === 'filler' ? '(filler)' : (s.title + (s.episode ? ' ' + s.episode : ''));
+              if (s.kind === 'program' && s.inPointMs > 0) { label += ' (continued)'; }
+              lines.push(time(s.start) + '  ' + (s.kind + '          ').slice(0, 10) + ' ' + label);
+            });
+            if (r.slots.length > shown.length) { lines.push('… ' + (r.slots.length - shown.length) + ' more'); }
+            out.textContent = lines.join('\n');
+          }, function () {
+            out.textContent = 'Preview failed. Check the channel settings.';
+          });
         });
 
         page.querySelector('#AddChannel').addEventListener('click', function () {
@@ -125,6 +236,7 @@
           if (!channels) { return; }
           channels.push(exampleChannel(channels));
           page.querySelector('#ChannelsJson').value = JSON.stringify(channels, null, 2);
+          refreshPreviewChoices();
         });
 
         page.querySelector('#RebuildNow').addEventListener('click', function () {
@@ -139,10 +251,22 @@
           e.preventDefault();
           var channels = parseChannels();
           if (!channels) { return false; }
+          var commercialSources;
+          try {
+            commercialSources = JSON.parse(page.querySelector('#CommercialSourcesJson').value || '[]');
+            if (!Array.isArray(commercialSources)) { throw new Error('must be a list'); }
+          } catch (err) {
+            page.querySelector('#JsonError').textContent = 'Invalid commercial sources: ' + err.message;
+            return false;
+          }
           Dashboard.showLoadingMsg();
           ApiClient.getPluginConfiguration(pluginId).then(function (config) {
             config.ScheduleAnchorUtc = page.querySelector('#ScheduleAnchorUtc').value || config.ScheduleAnchorUtc;
             config.Channels = channels;
+            config.CommercialSources = commercialSources;
+            config.FallbackMode = page.querySelector('#FallbackMode').value;
+            config.TranscodeHeight = parseInt(page.querySelector('#TranscodeHeight').value, 10) || 720;
+            config.NormalizeLoudness = page.querySelector('#NormalizeLoudness').checked;
             ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
               Dashboard.processPluginConfigurationUpdateResult(result);
               setTimeout(loadSummary, 1500);

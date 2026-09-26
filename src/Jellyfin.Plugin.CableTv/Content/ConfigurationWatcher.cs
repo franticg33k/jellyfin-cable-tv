@@ -1,4 +1,5 @@
 using System;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.Plugins;
@@ -31,6 +32,14 @@ public sealed class ConfigurationWatcher : IHostedService
     {
         if (Plugin.Instance is { } plugin)
         {
+            if (string.IsNullOrEmpty(plugin.Configuration.StreamKey))
+            {
+                // The server's own ffmpeg reads channel streams over loopback HTTP without a user token; this secret
+                // is what it presents instead.
+                plugin.Configuration.StreamKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+                plugin.SaveConfiguration();
+            }
+
             plugin.ConfigurationChanged += OnConfigurationChanged;
         }
 
