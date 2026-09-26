@@ -42,6 +42,9 @@ public class CableTvController : ControllerBase
     private readonly StreamManager _streams;
     private readonly PackService _packs;
     private readonly ChannelSuggester _suggester;
+    private readonly Weather.WeatherService _weather;
+
+    private static readonly System.Text.Json.JsonSerializerOptions WeatherJson = new(System.Text.Json.JsonSerializerDefaults.Web);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CableTvController"/> class.
@@ -51,8 +54,10 @@ public class CableTvController : ControllerBase
     /// <param name="streams">Stream manager.</param>
     /// <param name="packs">Import and export.</param>
     /// <param name="suggester">Channel suggestions.</param>
-    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams, PackService packs, ChannelSuggester suggester)
+    /// <param name="weather">Weather forecasts.</param>
+    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams, PackService packs, ChannelSuggester suggester, Weather.WeatherService weather)
     {
+        _weather = weather;
         _store = store;
         _refresher = refresher;
         _streams = streams;
@@ -76,7 +81,8 @@ public class CableTvController : ControllerBase
                 LogoUrl(c),
                 c.Timeline.Version,
                 c.Timeline.PoolSize,
-                string.IsNullOrWhiteSpace(c.Definition.Category) ? null : c.Definition.Category.Trim()))
+                string.IsNullOrWhiteSpace(c.Definition.Category) ? null : c.Definition.Category.Trim(),
+                c.Definition.Kind == ChannelKind.Standard ? null : c.Definition.Kind.ToString().ToLowerInvariant()))
             .ToList();
 
         return new ChannelListResponse(DateTime.UtcNow, channels);
@@ -154,7 +160,7 @@ public class CableTvController : ControllerBase
             .Select(c => new ChannelGuideDto(
                 c.Definition.Id,
                 c.Timeline.Version,
-                c.Timeline.GetBlocks(start, end).Select(GuideProgramDto.From).ToList()))
+                GuideMerge.Merge(c.Timeline.GetBlocks(start, end), c.Definition.Name).Select(GuideProgramDto.From).ToList()))
             .ToList();
         return new GuideResponse(DateTime.UtcNow, start, end, result);
     }
@@ -208,7 +214,8 @@ public class CableTvController : ControllerBase
         var channels = _store.Channels
             .Select(c => new ChannelBrandingDto(c.Definition.Id, LogoUrl(c)))
             .ToList();
-        return new PresentationResponse("Cable TV", channels);
+        var name = Plugin.Instance?.Configuration.ServiceName;
+        return new PresentationResponse(string.IsNullOrWhiteSpace(name) ? "Cable TV" : name.Trim(), channels);
     }
 
     /// <summary>
@@ -282,6 +289,32 @@ public class CableTvController : ControllerBase
             _ => "image/png",
         };
         return PhysicalFile(path, type);
+    }
+
+    /// <summary>
+    /// The forecast for a weather channel, for clients that draw the weather themselves.
+    /// </summary>
+    /// <param name="channelId">Weather channel id.</param>
+    /// <returns>The forecast (camelCase JSON).</returns>
+    [HttpGet("Weather/{channelId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult> GetWeather([FromRoute] string channelId)
+    {
+        var channel = _store.Get(channelId);
+        if (channel?.Definition.Kind != ChannelKind.Weather)
+        {
+            return NotFound();
+        }
+
+        var report = await _weather.GetAsync(channel.Definition, HttpContext.RequestAborted).ConfigureAwait(false);
+        if (report is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "No forecast yet; check the channel's location.");
+        }
+
+        return Content(System.Text.Json.JsonSerializer.Serialize(report, WeatherJson), "application/json");
     }
 
     /// <summary>
@@ -365,6 +398,28 @@ public class CableTvController : ControllerBase
     }
 
     /// <summary>
+    /// The web TV mode: a full-screen cable TV page for browsers. It signs in with the browser's Jellyfin session.
+    /// </summary>
+    /// <returns>The page.</returns>
+    [HttpGet("Web")]
+    [AllowAnonymous]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public ActionResult GetWebTv() => Resource("tv.html", "text/html; charset=utf-8");
+
+    /// <summary>
+    /// hls.js for the web TV mode (Apache-2.0).
+    /// </summary>
+    /// <returns>The script.</returns>
+    [HttpGet("hls.js")]
+    [AllowAnonymous]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public ActionResult GetHlsJs()
+    {
+        Response.Headers.CacheControl = "public, max-age=604800";
+        return Resource("hls.light.min.js", "text/javascript; charset=utf-8");
+    }
+
+    /// <summary>
     /// The channel's continuous MPEG-TS stream. Read by the server's own ffmpeg when a Live TV client tunes in; it
     /// authenticates with the plugin's stream key rather than a user token.
     /// </summary>
@@ -407,6 +462,13 @@ public class CableTvController : ControllerBase
         catch (OperationCanceledException) when (aborted.IsCancellationRequested)
         {
         }
+    }
+
+    private FileStreamResult Resource(string name, string contentType)
+    {
+        var stream = typeof(CableTvController).Assembly.GetManifestResourceStream("Jellyfin.Plugin.CableTv.Web." + name)
+                     ?? throw new InvalidOperationException("Missing resource " + name);
+        return File(stream, contentType);
     }
 
     private IEnumerable<ChannelSnapshot> SelectChannels(string? channelIds)

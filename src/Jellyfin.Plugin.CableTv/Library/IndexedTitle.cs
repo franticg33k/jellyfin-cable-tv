@@ -18,6 +18,9 @@ public enum TitleKind
 
     /// <summary>Any other standalone video (home videos, clips).</summary>
     Video = 3,
+
+    /// <summary>A music album; its tracks are what airs.</summary>
+    Album = 4,
 }
 
 /// <summary>
@@ -37,6 +40,9 @@ public sealed record IndexedTitle(Guid Id, TitleKind Kind, string Name, int? Yea
 
     /// <summary>Gets the tags.</summary>
     public string[] Tags { get; init; } = [];
+
+    /// <summary>Gets the artists, for albums.</summary>
+    public string[] Artists { get; init; } = [];
 
     /// <summary>Gets the official rating, for example "TV-PG".</summary>
     public string? OfficialRating { get; init; }

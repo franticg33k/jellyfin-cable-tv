@@ -7,9 +7,11 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.CableTv.Configuration;
 using Jellyfin.Plugin.CableTv.Content;
 using Jellyfin.Plugin.CableTv.Library;
+using Jellyfin.Plugin.CableTv.Scheduling;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 
 namespace Jellyfin.Plugin.CableTv.Packs;
 
@@ -160,6 +162,30 @@ public class ChannelSuggester
         if (halloween >= 2)
         {
             Add("Holidays", "Halloween", 600, halloween, c => c.Sorting = ChannelSorting.Random, Source(ContentSourceType.Keyword, HalloweenWords));
+        }
+
+        foreach (var (genre, count) in Top(index.Genres, TitleKind.Album, min))
+        {
+            Add("Music", genre + " Radio", 800, count, c =>
+            {
+                c.ItemTypes = ["Audio"];
+                c.Sorting = ChannelSorting.Random;
+                c.CommercialsEnabled = false;
+                c.GridMinutes = 0;
+                c.MidBreak = MidBreakMode.None;
+            }, Source(ContentSourceType.Genre, genre));
+        }
+
+        var trailers = _libraryManager.GetCount(new InternalItemsQuery { ExtraTypes = [ExtraType.Trailer], Recursive = true, IsVirtualItem = false });
+        if (trailers >= min)
+        {
+            Add("Trailers", "Coming Attractions", 900, trailers, c =>
+            {
+                c.ItemTypes = ["Video", "Trailer"];
+                c.Sorting = ChannelSorting.Random;
+                c.CommercialsEnabled = false;
+                c.GridMinutes = 0;
+            }, new ContentSource { Type = ContentSourceType.Trailers });
         }
 
         foreach (var (collection, count) in Collections(min))

@@ -70,4 +70,20 @@ public enum ContentSourceType
     /// Specific episodes by name: each value is "Show Title :: Episode Title".
     /// </summary>
     Episodes = 12,
+
+    /// <summary>
+    /// Trailers: local trailers of the library's movies and series (and trailer items). <see cref="ContentSource.Values"/>
+    /// may hold "Movies" or "Series" to take only those; empty for both. Also usable as commercials (a trailer pool).
+    /// </summary>
+    Trailers = 13,
+
+    /// <summary>
+    /// The sources of the content groups named in <see cref="ContentSource.Values"/>.
+    /// </summary>
+    Group = 14,
+
+    /// <summary>
+    /// Music by any artist in <see cref="ContentSource.Values"/>.
+    /// </summary>
+    Artist = 15,
 }

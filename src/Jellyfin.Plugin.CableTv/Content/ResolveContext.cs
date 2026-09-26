@@ -26,4 +26,7 @@ public sealed class ResolveContext
     internal ConcurrentDictionary<Guid, IReadOnlyList<BaseItem>> Children { get; } = new();
 
     internal ConcurrentDictionary<Guid, byte> UsedItems { get; } = new();
+
+    /// <summary>Gets or sets the library's trailers, fetched on first use.</summary>
+    internal IReadOnlyList<BaseItem>? Trailers { get; set; }
 }
