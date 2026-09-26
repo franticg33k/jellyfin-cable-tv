@@ -1,0 +1,194 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.CableTv.Configuration;
+using Jellyfin.Plugin.CableTv.Scheduling;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Playlists;
+using MediaBrowser.Model.Entities;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.CableTv.Content;
+
+/// <summary>
+/// Turns a channel's content sources into a de-duplicated pool in canonical order.
+/// </summary>
+public class ContentPoolResolver
+{
+    private readonly ILibraryManager _libraryManager;
+    private readonly ILogger<ContentPoolResolver> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ContentPoolResolver"/> class.
+    /// </summary>
+    /// <param name="libraryManager">Library manager.</param>
+    /// <param name="logger">Logger.</param>
+    public ContentPoolResolver(ILibraryManager libraryManager, ILogger<ContentPoolResolver> logger)
+    {
+        _libraryManager = libraryManager;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Resolves the pool for a channel.
+    /// </summary>
+    /// <param name="channel">Channel definition.</param>
+    /// <returns>The pool, in canonical order.</returns>
+    public IReadOnlyList<PoolItem> Resolve(ChannelDefinition channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+
+        var kinds = ParseKinds(channel.ItemTypes);
+        var found = new Dictionary<Guid, Video>();
+
+        foreach (var source in channel.Sources)
+        {
+            foreach (var item in ResolveSource(source, kinds))
+            {
+                if (item is Video video && IsSchedulable(video, kinds, channel.AllowSpecials))
+                {
+                    found.TryAdd(video.Id, video);
+                }
+            }
+        }
+
+        _logger.LogDebug("Channel {Channel} resolved {Count} items", channel.Id, found.Count);
+
+        return found.Values
+            .OrderBy(SortGroup, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(v => v.ParentIndexNumber ?? int.MaxValue)
+            .ThenBy(v => v.IndexNumber ?? int.MaxValue)
+            .ThenBy(v => v.ProductionYear ?? int.MaxValue)
+            .ThenBy(v => v.SortName ?? v.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(v => v.Id)
+            .Select(ToPoolItem)
+            .ToList();
+    }
+
+    private static string SortGroup(Video video)
+        => video is Episode episode ? episode.SeriesName ?? string.Empty : string.Empty;
+
+    private static BaseItemKind[] ParseKinds(IEnumerable<string> names)
+    {
+        var kinds = new List<BaseItemKind>();
+        foreach (var name in names)
+        {
+            if (Enum.TryParse<BaseItemKind>(name, true, out var kind)
+                && kind is BaseItemKind.Episode or BaseItemKind.Movie or BaseItemKind.MusicVideo or BaseItemKind.Video)
+            {
+                kinds.Add(kind);
+            }
+        }
+
+        return kinds.Count == 0 ? [BaseItemKind.Episode, BaseItemKind.Movie] : kinds.Distinct().ToArray();
+    }
+
+    private static bool IsSchedulable(Video video, BaseItemKind[] kinds, bool allowSpecials)
+        => !video.IsVirtualItem
+           && video.RunTimeTicks is > 0
+           && !string.IsNullOrEmpty(video.Path)
+           && video.ExtraType is null
+           && kinds.Contains(video.GetBaseItemKind())
+           && (allowSpecials || video is not Episode { ParentIndexNumber: 0 });
+
+    private static PoolItem ToPoolItem(Video video)
+    {
+        var episode = video as Episode;
+        var imagePath = video.GetImagePath(ImageType.Primary, 0)
+                        ?? episode?.Series?.GetImagePath(ImageType.Primary, 0);
+
+        return new PoolItem(
+            video.Id,
+            video.Id.ToString("N", CultureInfo.InvariantCulture),
+            video.RunTimeTicks!.Value,
+            episode?.SeriesName ?? video.Name)
+        {
+            EpisodeTitle = episode?.Name,
+            SeasonNumber = episode?.ParentIndexNumber,
+            EpisodeNumber = episode?.IndexNumber,
+            SeriesId = episode?.SeriesId,
+            IsMovie = video is Movie,
+            Overview = video.Overview,
+            Genres = video.Genres ?? [],
+            OfficialRating = video.OfficialRating,
+            ProductionYear = video.ProductionYear,
+            ImagePath = imagePath,
+            Path = video.Path,
+        };
+    }
+
+    private IEnumerable<BaseItem> ResolveSource(ContentSource source, BaseItemKind[] kinds)
+    {
+        switch (source.Type)
+        {
+            case ContentSourceType.Library:
+            case ContentSourceType.Items:
+                return source.Ids.SelectMany(id => Expand(_libraryManager.GetItemById(id), kinds));
+
+            case ContentSourceType.Collection:
+            case ContentSourceType.Playlist:
+                return source.Ids
+                    .Select(_libraryManager.GetItemById)
+                    .OfType<Folder>()
+                    .SelectMany(folder => folder.GetLinkedChildren())
+                    .SelectMany(child => Expand(child, kinds));
+
+            case ContentSourceType.Genre:
+                return QueryWithSeries(kinds, q => q.Genres = source.Values);
+
+            case ContentSourceType.Decade:
+                var years = source.Values
+                    .Select(v => int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var y) ? y : (int?)null)
+                    .OfType<int>()
+                    .SelectMany(start => Enumerable.Range(start - (start % 10), 10))
+                    .Distinct()
+                    .ToArray();
+                return years.Length == 0 ? [] : QueryWithSeries(kinds, q => q.Years = years);
+
+            default:
+                _logger.LogWarning("Unknown content source type {Type}", source.Type);
+                return [];
+        }
+    }
+
+    /// <summary>
+    /// Queries matching items plus matching series expanded to episodes, since genre and year usually live on the series.
+    /// </summary>
+    private IEnumerable<BaseItem> QueryWithSeries(BaseItemKind[] kinds, Action<InternalItemsQuery> filter)
+    {
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = kinds.Contains(BaseItemKind.Episode) ? [.. kinds, BaseItemKind.Series] : kinds,
+            Recursive = true,
+            IsVirtualItem = false,
+        };
+        filter(query);
+
+        return _libraryManager.GetItemList(query).SelectMany(item => Expand(item, kinds));
+    }
+
+    private IEnumerable<BaseItem> Expand(BaseItem? item, BaseItemKind[] kinds)
+    {
+        switch (item)
+        {
+            case null:
+                return [];
+            case Video video:
+                return [video];
+            case Folder folder:
+                return folder.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = kinds,
+                    Recursive = true,
+                    IsVirtualItem = false,
+                });
+            default:
+                return [];
+        }
+    }
+}

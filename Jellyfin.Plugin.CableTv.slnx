@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Jellyfin.Plugin.CableTv/Jellyfin.Plugin.CableTv.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Jellyfin.Plugin.CableTv.Tests/Jellyfin.Plugin.CableTv.Tests.csproj" />
+  </Folder>
+</Solution>
