@@ -110,15 +110,7 @@ public class CableTvController : ControllerBase
             end = start + MaxWindow;
         }
 
-        IEnumerable<ChannelSnapshot> channels = _store.Channels;
-        if (!string.IsNullOrWhiteSpace(channelIds))
-        {
-            var wanted = channelIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            channels = channels.Where(c => wanted.Contains(c.Definition.Id));
-        }
-
-        var result = channels
+        var result = SelectChannels(channelIds)
             .Select(c => new ChannelScheduleDto(
                 c.Definition.Id,
                 c.Definition.Number,
@@ -128,6 +120,43 @@ public class CableTvController : ControllerBase
 
         var combined = result.Aggregate(StableHash.Start(), (h, c) => StableHash.Add(StableHash.Add(h, c.ChannelId), c.ScheduleVersion));
         return new ScheduleResponse(now, start, end, StableHash.ToHex(combined, 12), result);
+    }
+
+    /// <summary>
+    /// Returns programmes for a time window, breaks folded in: what a guide needs, a fraction of the size of the
+    /// full schedule.
+    /// </summary>
+    /// <param name="channelIds">Comma-separated channel ids; all channels when omitted.</param>
+    /// <param name="from">Window start (UTC); now when omitted.</param>
+    /// <param name="to">Window end (UTC); six hours after <paramref name="from"/> when omitted. At most three days after it.</param>
+    /// <returns>The guide.</returns>
+    [HttpGet("Guide")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<GuideResponse> GetGuide(
+        [FromQuery] string? channelIds,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to)
+    {
+        var start = from?.ToUniversalTime() ?? DateTime.UtcNow;
+        var end = to?.ToUniversalTime() ?? start + DefaultWindow;
+        if (end <= start)
+        {
+            return BadRequest("'to' must be after 'from'.");
+        }
+
+        if (end - start > MaxWindow)
+        {
+            end = start + MaxWindow;
+        }
+
+        var result = SelectChannels(channelIds)
+            .Select(c => new ChannelGuideDto(
+                c.Definition.Id,
+                c.Timeline.Version,
+                c.Timeline.GetBlocks(start, end).Select(GuideProgramDto.From).ToList()))
+            .ToList();
+        return new GuideResponse(DateTime.UtcNow, start, end, result);
     }
 
     /// <summary>
@@ -242,7 +271,8 @@ public class CableTvController : ControllerBase
             return NotFound();
         }
 
-        Response.Headers.CacheControl = "public, max-age=86400";
+        // Logo URLs carry a version that changes with the image, so a versioned request can be cached for good.
+        Response.Headers.CacheControl = Request.Query.ContainsKey("v") ? "public, max-age=31536000, immutable" : "public, max-age=86400";
         var type = Path.GetExtension(path).ToLowerInvariant() switch
         {
             ".jpg" or ".jpeg" => "image/jpeg",
@@ -377,6 +407,19 @@ public class CableTvController : ControllerBase
         catch (OperationCanceledException) when (aborted.IsCancellationRequested)
         {
         }
+    }
+
+    private IEnumerable<ChannelSnapshot> SelectChannels(string? channelIds)
+    {
+        if (string.IsNullOrWhiteSpace(channelIds))
+        {
+            return _store.Channels;
+        }
+
+        return channelIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(_store.Get)
+            .OfType<ChannelSnapshot>();
     }
 
     private string? LogoUrl(ChannelSnapshot channel)
