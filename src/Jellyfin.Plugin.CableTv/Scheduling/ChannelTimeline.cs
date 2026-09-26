@@ -37,7 +37,10 @@ public sealed class ChannelTimeline : IChannelTimeline
     private readonly PoolItem[] _commercials;
     private readonly TimelineOptions _options;
     private readonly long _anchorTicks;
-    private CachedOrder? _lastOrder;
+    // The two most recently used cycles (a request near a cycle boundary spans two). Each entry is swapped in whole,
+    // so concurrent readers see a consistent order and prefix array.
+    private CachedOrder? _recent;
+    private CachedOrder? _older;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelTimeline"/> class with no breaks.
@@ -119,8 +122,7 @@ public sealed class ChannelTimeline : IChannelTimeline
 
         var cycle = FloorDiv(fromTicks - _anchorTicks, CycleTicks);
         var cycleStart = _anchorTicks + (cycle * CycleTicks);
-        var order = GetOrder(cycle);
-        var starts = PrefixStarts(order);
+        var (order, starts) = Cycle(cycle);
 
         // Last block whose start is at or before fromTicks.
         var index = Array.BinarySearch(starts, fromTicks - cycleStart);
@@ -135,8 +137,7 @@ public sealed class ChannelTimeline : IChannelTimeline
             {
                 cycle++;
                 cycleStart += CycleTicks;
-                order = GetOrder(cycle);
-                starts = PrefixStarts(order);
+                (order, starts) = Cycle(cycle);
                 index = 0;
             }
 
@@ -217,19 +218,7 @@ public sealed class ChannelTimeline : IChannelTimeline
     {
         var cycle = FloorDiv(n, _pool.Length);
         var position = (int)(n - (cycle * _pool.Length));
-        // A reference swap, so concurrent readers see either the old or the new pair, never a mix.
-        var cached = Volatile.Read(ref _lastOrder);
-        int[] order;
-        if (cached is not null && cached.Cycle == cycle)
-        {
-            order = cached.Order;
-        }
-        else
-        {
-            order = GetOrder(cycle);
-            Volatile.Write(ref _lastOrder, new CachedOrder(cycle, order));
-        }
-
+        var (order, _) = Cycle(cycle);
         blockTicks = _blockTicks[order[position]];
         return _pool[order[position]];
     }
@@ -274,18 +263,45 @@ public sealed class ChannelTimeline : IChannelTimeline
         PoolItem? previous = null;
         for (var i = 0; i < MaxCommercialsPerBreak && remaining > 0; i++)
         {
-            var fits = _commercials.Where(c => c.DurationTicks <= remaining).ToArray();
-            if (fits.Length > 1 && previous is not null)
+            // A uniform pick among the commercials that fit, skipping the one just shown when there's a choice.
+            // Counted and indexed in place: this runs for every commercial in every schedule request.
+            var fitting = 0;
+            var repeats = 0;
+            foreach (var c in _commercials)
             {
-                fits = fits.Where(c => c.ItemId != previous.ItemId).ToArray();
+                if (c.DurationTicks <= remaining)
+                {
+                    fitting++;
+                    if (previous is not null && c.ItemId == previous.ItemId)
+                    {
+                        repeats++;
+                    }
+                }
             }
 
-            if (fits.Length == 0)
+            var skipPrevious = fitting > 1 && previous is not null;
+            var choices = skipPrevious ? fitting - repeats : fitting;
+            if (choices == 0)
             {
                 break;
             }
 
-            var pick = fits[random.NextInt(fits.Length)];
+            var wanted = random.NextInt(choices);
+            PoolItem pick = null!;
+            foreach (var c in _commercials)
+            {
+                if (c.DurationTicks > remaining || (skipPrevious && c.ItemId == previous!.ItemId))
+                {
+                    continue;
+                }
+
+                if (wanted-- == 0)
+                {
+                    pick = c;
+                    break;
+                }
+            }
+
             parts.Add((pick, pick.DurationTicks));
             remaining -= pick.DurationTicks;
             previous = pick;
@@ -368,6 +384,31 @@ public sealed class ChannelTimeline : IChannelTimeline
             new DateTime(start, DateTimeKind.Utc),
             new DateTime(start + blockTicks, DateTimeKind.Utc),
             slots);
+    }
+
+    /// <summary>
+    /// A cycle's order and block start offsets, computed once per cycle rather than on every request: shuffling a
+    /// large pool is the most expensive part of answering a schedule query.
+    /// </summary>
+    private (int[] Order, long[] Starts) Cycle(long cycle)
+    {
+        var recent = Volatile.Read(ref _recent);
+        if (recent is not null && recent.Cycle == cycle)
+        {
+            return (recent.Order, recent.Starts);
+        }
+
+        var older = Volatile.Read(ref _older);
+        if (older is not null && older.Cycle == cycle)
+        {
+            return (older.Order, older.Starts);
+        }
+
+        var order = GetOrder(cycle);
+        var entry = new CachedOrder(cycle, order, PrefixStarts(order));
+        Volatile.Write(ref _older, recent);
+        Volatile.Write(ref _recent, entry);
+        return (entry.Order, entry.Starts);
     }
 
     private long[] PrefixStarts(int[] order)
@@ -631,5 +672,5 @@ public sealed class ChannelTimeline : IChannelTimeline
     private SplitMix64 CycleRng(long cycle)
         => new(StableHash.Add(StableHash.Add(StableHash.Start(), ChannelId), cycle));
 
-    private sealed record CachedOrder(long Cycle, int[] Order);
+    private sealed record CachedOrder(long Cycle, int[] Order, long[] Starts);
 }

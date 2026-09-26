@@ -15,15 +15,15 @@ The work is built from scratch; no NostalgiaTV code or assets are used.
 
 ## Install
 
-Requires **Jellyfin 12.x**. The installable package is [`dist/cabletv_0.4.0.0.zip`](dist/).
+Requires **Jellyfin 12.x**. The installable package is [`dist/cabletv_0.4.1.0.zip`](dist/).
 
 **Option A: drop it in (works today).**
 
 1. Stop Jellyfin.
-2. Unzip `cabletv_0.4.0.0.zip` into a new folder `<jellyfin config>/plugins/Cable TV_0.4.0.0/`
+2. Unzip `cabletv_0.4.1.0.zip` into a new folder `<jellyfin config>/plugins/Cable TV_0.4.1.0/`
    (Docker: `/config/plugins/…`; Linux packages: `/var/lib/jellyfin/plugins/…`;
    Windows: `%ProgramData%\Jellyfin\Server\plugins\…`).
-3. Start Jellyfin. **Dashboard → Plugins** lists *Cable TV 0.4.0.0*.
+3. Start Jellyfin. **Dashboard → Plugins** lists *Cable TV 0.4.1.0*.
 
 **Option B: plugin repository (installs and updates from the dashboard).**
 
@@ -144,7 +144,7 @@ The JSON form of a channel, for reference:
 | 3. Fallback stream | Continuous copy-video / AAC-audio stream, shared per channel, timestamps that never rewind | Done |
 | 4. Commercials | Break planning, halfway and chapter mid-breaks, fill-to-grid, one guide entry per programme | Done (pre-converting the ad library is not done; Auto mode transcodes mismatched ads on the fly) |
 | 5. Scheduling depth | Sorting modes, weights, time slots, restricted hours, seasonal lineups, premieres, settings form, preview | Done |
-| 5b. Lineups | Suggestions, quick channels, CSV/JSON import and export, title/network/tag/rating/year/keyword sources, logos | Done (0.4.0.0) |
+| 5b. Lineups | Suggestions, quick channels, CSV/JSON import and export, title/network/tag/rating/year/keyword sources, logos | Done (0.4.1.0) |
 | 6–7. Presentation, extras | Branding, trailer pools, stream channels, web TV mode | Planned |
 
 Known limits:

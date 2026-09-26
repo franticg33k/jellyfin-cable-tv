@@ -24,6 +24,7 @@ public class ChannelStore
     private readonly ILogger<ChannelStore> _logger;
     private readonly Lock _rebuildLock = new();
     private IReadOnlyList<ChannelSnapshot>? _channels;
+    private Dictionary<string, ChannelSnapshot> _byId = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelStore"/> class.
@@ -49,7 +50,10 @@ public class ChannelStore
     /// <param name="channelId">Channel id.</param>
     /// <returns>The channel, or null.</returns>
     public ChannelSnapshot? Get(string channelId)
-        => Channels.FirstOrDefault(c => string.Equals(c.Definition.Id, channelId, StringComparison.OrdinalIgnoreCase));
+    {
+        _ = Channels;
+        return Volatile.Read(ref _byId).GetValueOrDefault(channelId);
+    }
 
     /// <summary>
     /// Builds a channel's timeline from the library without publishing it, for previews of unsaved settings.
@@ -97,6 +101,7 @@ public class ChannelStore
                 .OrderBy(c => ChannelNumber.SortKey(c.Definition.Number))
                 .ThenBy(c => c.Definition.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            Volatile.Write(ref _byId, ordered.GroupBy(c => c.Definition.Id, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase));
             Volatile.Write(ref _channels, ordered);
             _resolver.Trim(context);
             _resolver.ShareContext(context);

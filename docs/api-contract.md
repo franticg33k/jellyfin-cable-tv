@@ -10,6 +10,7 @@ server's naming policy. Times are UTC ISO 8601.
 | `GET /CableTv/Channels` | Channel list: id, number, name, `logoUrl` (absolute URL of `/CableTv/Logo/{id}`), `category`, `scheduleVersion`, `poolSize` |
 | `GET /CableTv/Logo/{channelId}` | Anonymous: the channel's logo image (or a redirect to it) |
 | `GET /CableTv/Schedule?channelIds=&from=&to=` | Resolved slots for a window, with `serverTime` |
+| `GET /CableTv/Guide?channelIds=&from=&to=` | Programmes for a window (breaks folded into one entry each): what a guide grid needs, about 30× smaller than `Schedule` |
 | `GET /CableTv/Now?channelId=&next=3` | Airing slot, the offset to start at, and the next slots to preload |
 | `GET /CableTv/Presentation` | Server-set branding |
 | `POST /CableTv/Rebuild` | Admin only: re-read pools from the library and refresh the Live TV guide |
@@ -77,6 +78,9 @@ server's naming policy. Times are UTC ISO 8601.
   stretch where the channel is off air).
 - `premiere: true` marks an airing of a newly added item; `lineup` names the time slot or seasonal lineup a
   slot belongs to. Both are omitted otherwise.
+- `year`, `rating` (official rating, e.g. `TV-PG`) and `movie: true` describe the item, for guide colours and
+  badges. Anything else (overview, images, media details) comes from Jellyfin's item API when a client needs it.
+- `mediaSourceId` is omitted when it's the item itself (the usual case); play the item's default source then.
 - Fields that are null are omitted from the JSON (Jellyfin's serializer), for example `itemId` and `title`
   on filler and `episode` on movies.
 - `guideGroup` ties breaks to their programme, so a guide shows one block and the player sees every item.
