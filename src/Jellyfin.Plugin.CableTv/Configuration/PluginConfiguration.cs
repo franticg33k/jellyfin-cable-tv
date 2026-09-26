@@ -45,4 +45,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the secret the server's own ffmpeg uses to read channel streams. Generated on first start.
     /// </summary>
     public string StreamKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the time zone time slots, restricted hours, seasons and premieres are written in, for example
+    /// "America/New_York". Empty for the server's time zone.
+    /// </summary>
+    public string TimeZone { get; set; } = string.Empty;
 }

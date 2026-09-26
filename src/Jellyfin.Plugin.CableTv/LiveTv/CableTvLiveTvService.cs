@@ -56,7 +56,7 @@ public class CableTvLiveTvService : ILiveTvService
     public string Name => "Cable TV";
 
     /// <inheritdoc />
-    public string HomePageUrl => "https://github.com/arun-iv/jellyfin-cable-tv";
+    public string HomePageUrl => "https://github.com/franticg33k/jellyfin-cable-tv";
 
     /// <inheritdoc />
     public Task<IEnumerable<ChannelInfo>> GetChannelsAsync(CancellationToken cancellationToken)
@@ -160,6 +160,18 @@ public class CableTvLiveTvService : ILiveTvService
     private static ProgramInfo ToProgram(string channelId, ScheduledBlock block)
     {
         var item = block.Item;
+        if (item is null)
+        {
+            return new ProgramInfo
+            {
+                Id = channelId + "_" + block.BlockId,
+                ChannelId = channelId,
+                Name = "Off air",
+                StartDate = block.StartUtc,
+                EndDate = block.EndUtc,
+            };
+        }
+
         return new ProgramInfo
         {
             Id = channelId + "_" + block.BlockId,
@@ -176,7 +188,8 @@ public class CableTvLiveTvService : ILiveTvService
             EndDate = block.EndUtc,
             IsMovie = item.IsMovie,
             IsSeries = item.SeriesId.HasValue,
-            IsRepeat = true,
+            IsRepeat = !block.IsPremiere,
+            IsPremiere = block.IsPremiere,
             SeriesId = item.SeriesId?.ToString("N", CultureInfo.InvariantCulture),
             ShowId = item.SeriesId?.ToString("N", CultureInfo.InvariantCulture),
             ImagePath = item.ImagePath,

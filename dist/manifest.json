@@ -4,17 +4,17 @@
     "name": "Cable TV",
     "description": "Builds cable-style channels from your libraries, collections, playlists, genres and decades on a deterministic schedule, publishes them to Live TV with a guide, and exposes a schedule API for clients that tune in instantly by direct-playing at the right offset.",
     "overview": "Scheduled, always-on channels built from your library",
-    "owner": "arun-iv",
+    "owner": "franticg33k",
     "category": "LiveTV",
     "imageUrl": "",
     "versions": [
       {
-        "version": "0.2.0.0",
-        "changelog": "Continuous Live TV stream that joins mid-show and runs through programmes (copy video, AAC audio, loudness levelling, one ffmpeg per watched channel). Commercial breaks with fill-to-grid and halfway or chapter mid-breaks. Round robin, block and marathon sorting, source weights, and a schedule preview on the settings page.",
+        "version": "0.3.1.0",
+        "changelog": "Project moved to github.com/franticg33k/jellyfin-cable-tv. Includes 0.3.0.0: time slots, restricted hours, seasonal lineups, premieres, form-based settings, guide refresh after server start.",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/arun-iv/jellyfin-cable-tv/main/dist/cabletv_0.2.0.0.zip",
-        "checksum": "32c6520834c5ac181454bddabc558b08",
-        "timestamp": "2026-09-26T09:51:32Z"
+        "sourceUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/cabletv_0.3.1.0.zip",
+        "checksum": "3d9391256eafb34060ff8ea718c92d84",
+        "timestamp": "2026-09-26T11:29:11Z"
       }
     ]
   }

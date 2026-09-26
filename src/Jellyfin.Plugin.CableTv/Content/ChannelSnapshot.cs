@@ -10,4 +10,4 @@ namespace Jellyfin.Plugin.CableTv.Content;
 /// <param name="Definition">Channel definition.</param>
 /// <param name="Timeline">Timeline built from the pool.</param>
 /// <param name="Stream">Format of the channel's continuous Live TV stream.</param>
-public sealed record ChannelSnapshot(ChannelDefinition Definition, ChannelTimeline Timeline, StreamProfile Stream);
+public sealed record ChannelSnapshot(ChannelDefinition Definition, IChannelTimeline Timeline, StreamProfile Stream);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Jellyfin.Plugin.CableTv.Configuration;
 
 namespace Jellyfin.Plugin.CableTv.Scheduling;
@@ -20,7 +21,7 @@ namespace Jellyfin.Plugin.CableTv.Scheduling;
 /// commercials fill a break is chosen by a generator seeded with the block's id, so it is deterministic too.
 /// </para>
 /// </remarks>
-public sealed class ChannelTimeline
+public sealed class ChannelTimeline : IChannelTimeline
 {
     /// <summary>
     /// Upper bound on slots returned by one query, as a guard against pathological pools of tiny items.
@@ -36,6 +37,7 @@ public sealed class ChannelTimeline
     private readonly PoolItem[] _commercials;
     private readonly TimelineOptions _options;
     private readonly long _anchorTicks;
+    private CachedOrder? _lastOrder;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelTimeline"/> class with no breaks.
@@ -93,42 +95,11 @@ public sealed class ChannelTimeline
     /// <summary>Gets the number of blocks per cycle (weighted copies included).</summary>
     public int PoolSize => _pool.Length;
 
-    /// <summary>
-    /// Returns the slot airing at <paramref name="atUtc"/>, or null for an empty pool.
-    /// </summary>
-    /// <param name="atUtc">Instant to look up.</param>
-    /// <returns>The airing slot.</returns>
-    public ScheduledSlot? GetSlotAt(DateTime atUtc)
-        => GetSlots(atUtc, atUtc.AddTicks(1)).FirstOrDefault();
+    /// <inheritdoc />
+    public ScheduledSlot? GetSlotAt(DateTime atUtc) => TimelineSlots.At(this, atUtc);
 
-    /// <summary>
-    /// Returns the slots overlapping <c>[fromUtc, toUtc)</c>, in order and contiguous.
-    /// </summary>
-    /// <param name="fromUtc">Window start.</param>
-    /// <param name="toUtc">Window end.</param>
-    /// <returns>The slots.</returns>
-    public IEnumerable<ScheduledSlot> GetSlots(DateTime fromUtc, DateTime toUtc)
-    {
-        var emitted = 0;
-        foreach (var block in GetBlocks(fromUtc, toUtc))
-        {
-            foreach (var slot in block.Slots)
-            {
-                if (slot.EndUtc <= fromUtc)
-                {
-                    continue;
-                }
-
-                if (slot.StartUtc >= toUtc || emitted >= MaxSlotsPerQuery)
-                {
-                    yield break;
-                }
-
-                emitted++;
-                yield return slot;
-            }
-        }
-    }
+    /// <inheritdoc />
+    public IEnumerable<ScheduledSlot> GetSlots(DateTime fromUtc, DateTime toUtc) => TimelineSlots.Between(this, fromUtc, toUtc);
 
     /// <summary>
     /// Returns the blocks overlapping <c>[fromUtc, toUtc)</c>, in order.
@@ -175,7 +146,7 @@ public sealed class ChannelTimeline
                 yield break;
             }
 
-            yield return ExpandBlock(cycle, index, order[index], start);
+            yield return BuildBlock(_pool[order[index]], _blockTicks[order[index]], BlockHash(cycle, index), start);
             index++;
         }
     }
@@ -236,11 +207,100 @@ public sealed class ChannelTimeline
         return half;
     }
 
-    private ScheduledBlock ExpandBlock(long cycle, int position, int poolIndex, long start)
+    /// <summary>Gets the mean block length, used to estimate how far through its sequence a rule segment is.</summary>
+    internal long AverageBlockTicks => _pool.Length == 0 ? 0 : CycleTicks / _pool.Length;
+
+    /// <summary>
+    /// Returns the item at position <paramref name="n"/> of the channel's endless sequence (cycle after cycle) and its block length.
+    /// </summary>
+    internal PoolItem SequenceItem(long n, out long blockTicks)
     {
-        var item = _pool[poolIndex];
-        var blockTicks = _blockTicks[poolIndex];
-        var blockHash = BlockHash(cycle, position);
+        var cycle = FloorDiv(n, _pool.Length);
+        var position = (int)(n - (cycle * _pool.Length));
+        // A reference swap, so concurrent readers see either the old or the new pair, never a mix.
+        var cached = Volatile.Read(ref _lastOrder);
+        int[] order;
+        if (cached is not null && cached.Cycle == cycle)
+        {
+            order = cached.Order;
+        }
+        else
+        {
+            order = GetOrder(cycle);
+            Volatile.Write(ref _lastOrder, new CachedOrder(cycle, order));
+        }
+
+        blockTicks = _blockTicks[order[position]];
+        return _pool[order[position]];
+    }
+
+    /// <summary>Gets the block length an item airs as on this channel.</summary>
+    internal long BlockTicksFor(PoolItem item) => BlockTicks(item);
+
+    /// <summary>
+    /// Builds a block for <paramref name="item"/> at <paramref name="start"/>; <paramref name="seed"/> names it and picks its commercials.
+    /// </summary>
+    internal ScheduledBlock BuildBlock(PoolItem item, long start, ulong seed) => BuildBlock(item, BlockTicks(item), seed, start);
+
+    /// <summary>
+    /// Fills a gap with commercials, then filler, as slots in an existing guide group.
+    /// </summary>
+    internal IReadOnlyList<ScheduledSlot> BuildGap(long start, long length, ulong seed, string idPrefix, string guideGroup)
+    {
+        var slots = new List<ScheduledSlot>();
+        var rng = new SplitMix64(seed);
+        var cursor = start;
+        foreach (var (item, ticks) in FillBreak(length, ref rng))
+        {
+            slots.Add(new ScheduledSlot(
+                idPrefix + "-" + slots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                item is null ? SlotKind.Filler : SlotKind.Commercial,
+                new DateTime(cursor, DateTimeKind.Utc),
+                new DateTime(cursor + ticks, DateTimeKind.Utc),
+                item,
+                0,
+                ticks,
+                guideGroup));
+            cursor += ticks;
+        }
+
+        return slots;
+    }
+
+    private List<(PoolItem? Item, long Ticks)> FillBreak(long length, ref SplitMix64 random)
+    {
+        var parts = new List<(PoolItem? Item, long Ticks)>();
+        var remaining = length;
+        PoolItem? previous = null;
+        for (var i = 0; i < MaxCommercialsPerBreak && remaining > 0; i++)
+        {
+            var fits = _commercials.Where(c => c.DurationTicks <= remaining).ToArray();
+            if (fits.Length > 1 && previous is not null)
+            {
+                fits = fits.Where(c => c.ItemId != previous.ItemId).ToArray();
+            }
+
+            if (fits.Length == 0)
+            {
+                break;
+            }
+
+            var pick = fits[random.NextInt(fits.Length)];
+            parts.Add((pick, pick.DurationTicks));
+            remaining -= pick.DurationTicks;
+            previous = pick;
+        }
+
+        if (remaining > 0)
+        {
+            parts.Add((null, remaining));
+        }
+
+        return parts;
+    }
+
+    private ScheduledBlock BuildBlock(PoolItem item, long blockTicks, ulong blockHash, long start)
+    {
         var blockId = StableHash.ToHex(blockHash, 12);
         var guideGroup = "g-" + blockId;
 
@@ -283,28 +343,10 @@ public sealed class ChannelTimeline
 
         void AddBreak(long length, ref SplitMix64 random)
         {
-            var remaining = length;
-            PoolItem? previous = null;
-            for (var i = 0; i < MaxCommercialsPerBreak && remaining > 0; i++)
+            foreach (var (part, ticks) in FillBreak(length, ref random))
             {
-                var fits = _commercials.Where(c => c.DurationTicks <= remaining).ToArray();
-                if (fits.Length > 1 && previous is not null)
-                {
-                    fits = fits.Where(c => c.ItemId != previous.ItemId).ToArray();
-                }
-
-                if (fits.Length == 0)
-                {
-                    break;
-                }
-
-                var pick = fits[random.NextInt(fits.Length)];
-                Add(SlotKind.Commercial, pick, 0, pick.DurationTicks);
-                remaining -= pick.DurationTicks;
-                previous = pick;
+                Add(part is null ? SlotKind.Filler : SlotKind.Commercial, part, 0, ticks);
             }
-
-            Add(SlotKind.Filler, null, 0, remaining);
         }
 
         if (split is long at)
@@ -588,4 +630,6 @@ public sealed class ChannelTimeline
 
     private SplitMix64 CycleRng(long cycle)
         => new(StableHash.Add(StableHash.Add(StableHash.Start(), ChannelId), cycle));
+
+    private sealed record CachedOrder(long Cycle, int[] Order);
 }

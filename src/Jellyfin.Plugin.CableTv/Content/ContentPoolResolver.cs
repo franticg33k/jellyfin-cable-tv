@@ -157,6 +157,7 @@ public class ContentPoolResolver
             ImagePath = imagePath,
             Path = video.Path,
             Weight = weight,
+            DateCreated = video.DateCreated == default ? null : DateTime.SpecifyKind(video.DateCreated, DateTimeKind.Utc),
             ChapterTicks = chapters,
             VideoCodec = videoStream?.Codec,
             Width = videoStream?.Width,

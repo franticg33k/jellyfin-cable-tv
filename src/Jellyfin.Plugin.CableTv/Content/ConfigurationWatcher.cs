@@ -9,10 +9,14 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.CableTv.Content;
 
 /// <summary>
-/// Rebuilds channels and refreshes the guide whenever the plugin configuration is saved.
+/// Rebuilds channels and refreshes the guide whenever the plugin configuration is saved, and once shortly after the
+/// server starts, so an upgraded plugin's schedule reaches the guide without waiting for Jellyfin's daily refresh.
 /// </summary>
-public sealed class ConfigurationWatcher : IHostedService
+public sealed class ConfigurationWatcher : IHostedService, IDisposable
 {
+    private static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(1);
+
+    private readonly CancellationTokenSource _stopping = new();
     private readonly GuideRefresher _refresher;
     private readonly ILogger<ConfigurationWatcher> _logger;
 
@@ -43,18 +47,39 @@ public sealed class ConfigurationWatcher : IHostedService
             plugin.ConfigurationChanged += OnConfigurationChanged;
         }
 
+        _ = RefreshAfterStartupAsync(_stopping.Token);
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
+    public void Dispose() => _stopping.Dispose();
+
+    /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        _stopping.Cancel();
         if (Plugin.Instance is { } plugin)
         {
             plugin.ConfigurationChanged -= OnConfigurationChanged;
         }
 
         return Task.CompletedTask;
+    }
+
+    private async Task RefreshAfterStartupAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(StartupDelay, cancellationToken).ConfigureAwait(false);
+            _refresher.RebuildAndRefreshGuide();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh Cable TV channels after startup");
+        }
     }
 
     private void OnConfigurationChanged(object? sender, BasePluginConfiguration e)
