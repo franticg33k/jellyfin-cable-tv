@@ -69,7 +69,10 @@ server's naming policy. Times are UTC ISO 8601.
 - `kind` is one of `program`, `commercial`, `bumper`, `filler`, `stream` (outside HLS/TS URL) or
   `generated` (for example weather). The plugin currently emits `program`, `commercial` and `filler`;
   clients must skip kinds they don't know.
-- `filler` has no item: render static or black for its duration (it pads a break to the grid).
+- `filler` has no item: render static or black for its duration (it pads a break to the grid, or fills a
+  stretch where the channel is off air).
+- `premiere: true` marks an airing of a newly added item; `lineup` names the time slot or seasonal lineup a
+  slot belongs to. Both are omitted otherwise.
 - Fields that are null are omitted from the JSON (Jellyfin's serializer), for example `itemId` and `title`
   on filler and `episode` on movies.
 - `guideGroup` ties breaks to their programme, so a guide shows one block and the player sees every item.
@@ -95,6 +98,12 @@ avoidable), `Cyclic` (canonical order), `RoundRobin` (one episode per series in 
 (`BlockSize` episodes per series in turn) or `Marathon` (series back to back, series order reshuffled
 each cycle). Nothing is stored, so restarts and multiple servers agree, and Live TV's guide
 matches what the API returns.
+
+Channels with time slots, restricted hours (a source's `AirHours`), seasonal lineups or premieres are planned
+one local day at a time (in the configured time zone): the day is cut at every rule boundary, and each piece is
+packed with whole blocks from its pool so slots start on time; minutes left before a boundary become
+commercials or filler. Where each piece starts in its pool's sequence is estimated from the airtime that pool
+has had since the anchor, so ordered pools carry on from day to day without stored state.
 
 Pools are re-read from the library only on a rebuild (saving the configuration, the daily
 "Rebuild Cable TV channels" task, or `POST /CableTv/Rebuild`). A rebuild that changes a pool reshuffles

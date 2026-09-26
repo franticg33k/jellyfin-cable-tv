@@ -21,4 +21,11 @@ public sealed record ScheduledSlot(
     PoolItem? Item,
     long InPointTicks,
     long OutPointTicks,
-    string GuideGroup);
+    string GuideGroup)
+{
+    /// <summary>Gets a value indicating whether the slot is part of a premiere.</summary>
+    public bool IsPremiere { get; init; }
+
+    /// <summary>Gets the name of the time slot or seasonal lineup the slot belongs to, if any.</summary>
+    public string? Lineup { get; init; }
+}

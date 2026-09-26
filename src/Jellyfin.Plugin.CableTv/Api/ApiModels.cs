@@ -110,6 +110,8 @@ public sealed record ChannelBrandingDto(
 /// <param name="Episode">"S02E05" label, when the item is an episode.</param>
 /// <param name="EpisodeTitle">Episode title.</param>
 /// <param name="GuideGroup">Groups a programme with its breaks.</param>
+/// <param name="Premiere">True for a premiere of a newly added item; omitted otherwise.</param>
+/// <param name="Lineup">Name of the time slot or seasonal lineup; omitted for the main lineup.</param>
 public sealed record SlotDto(
     [property: JsonPropertyName("slotId")] string SlotId,
     [property: JsonPropertyName("kind")] string Kind,
@@ -122,7 +124,9 @@ public sealed record SlotDto(
     [property: JsonPropertyName("title")] string? Title,
     [property: JsonPropertyName("episode")] string? Episode,
     [property: JsonPropertyName("episodeTitle")] string? EpisodeTitle,
-    [property: JsonPropertyName("guideGroup")] string GuideGroup)
+    [property: JsonPropertyName("guideGroup")] string GuideGroup,
+    [property: JsonPropertyName("premiere")] bool? Premiere = null,
+    [property: JsonPropertyName("lineup")] string? Lineup = null)
 {
     /// <summary>Maps an engine slot to the wire format.</summary>
     /// <param name="slot">Engine slot.</param>
@@ -142,6 +146,8 @@ public sealed record SlotDto(
             slot.Item?.Title,
             slot.Item?.EpisodeLabel,
             slot.Item?.EpisodeTitle,
-            slot.GuideGroup);
+            slot.GuideGroup,
+            slot.IsPremiere ? true : null,
+            slot.Lineup);
     }
 }

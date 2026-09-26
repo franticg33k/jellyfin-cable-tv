@@ -1,7 +1,7 @@
 # Plugin manifest for jprm (Jellyfin plugin repository manager).
 name: "Cable TV"
 guid: "ddef6196-173c-4477-b5e8-72811d8d96e4"
-version: "0.2.0.0"
+version: "0.3.1.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 overview: "Scheduled, always-on channels built from your library"
@@ -10,11 +10,9 @@ description: >
   deterministic schedule, publishes them to Live TV with a guide, and exposes a schedule API for clients
   that tune in instantly by direct-playing at the right offset.
 category: "LiveTV"
-owner: "arun-iv"
+owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
-  Continuous Live TV stream that joins mid-show and runs through programmes (copy video, AAC audio,
-  loudness levelling, one ffmpeg per watched channel). Commercial breaks with fill-to-grid and
-  halfway or chapter mid-breaks. Round robin, block and marathon sorting, source weights, and a
-  schedule preview on the settings page.
+  Project moved to github.com/franticg33k/jellyfin-cable-tv. Includes 0.3.0.0: time slots, restricted
+  hours, seasonal lineups, premieres, form-based settings, guide refresh after server start.

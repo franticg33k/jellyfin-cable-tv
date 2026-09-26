@@ -19,7 +19,7 @@ import zipfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PROJECT = ROOT / "src" / "Jellyfin.Plugin.CableTv"
 DIST = ROOT / "dist"
-DEFAULT_BASE_URL = "https://raw.githubusercontent.com/arun-iv/jellyfin-cable-tv/main/dist"
+DEFAULT_BASE_URL = "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist"
 
 
 def build_yaml():
