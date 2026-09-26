@@ -1,18 +1,20 @@
 # Plugin ↔ client API contract (v1 draft)
 
-The plugin decides what airs when; a client that wants instant, transcode-free tune-in (the planned Wholphin
-fork, or web) plays it. This API is the only thing the two share. All endpoints need a normal Jellyfin
+The plugin decides what airs when; a client that wants instant, transcode-free tune-in (the Wholphin
+fork, or the web TV page) plays it. This API is the only thing the two share. All endpoints need a normal Jellyfin
 user token (`Authorization: MediaBrowser ... Token="..."`) and return camelCase JSON regardless of the
 server's naming policy. Times are UTC ISO 8601.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /CableTv/Channels` | Channel list: id, number, name, `logoUrl` (absolute URL of `/CableTv/Logo/{id}`), `category`, `scheduleVersion`, `poolSize` |
+| `GET /CableTv/Channels` | Channel list: id, number, name, `logoUrl` (absolute URL of `/CableTv/Logo/{id}`), `category`, `scheduleVersion`, `poolSize`, `kind` (`stream` or `weather`; omitted for standard channels) |
 | `GET /CableTv/Logo/{channelId}` | Anonymous: the channel's logo image (or a redirect to it) |
 | `GET /CableTv/Schedule?channelIds=&from=&to=` | Resolved slots for a window, with `serverTime` |
 | `GET /CableTv/Guide?channelIds=&from=&to=` | Programmes for a window (breaks folded into one entry each): what a guide grid needs, about 30× smaller than `Schedule` |
 | `GET /CableTv/Now?channelId=&next=3` | Airing slot, the offset to start at, and the next slots to preload |
-| `GET /CableTv/Presentation` | Server-set branding |
+| `GET /CableTv/Presentation` | Server-set branding: `serviceName` and each channel's logo |
+| `GET /CableTv/Weather/{channelId}` | A weather channel's forecast (below); 404 for other channels, 503 while no forecast is available |
+| `GET /CableTv/Web` | Anonymous: the browser TV page (it signs in itself); `/CableTv/hls.js` is its player library |
 | `POST /CableTv/Rebuild` | Admin only: re-read pools from the library and refresh the Live TV guide |
 | `POST /CableTv/Preview?hours=6` | Admin only: body is a channel definition (unsaved); returns the coming slots |
 | `GET /CableTv/Suggestions?minTitles=3` | Admin only: channels the library could fill (networks, genres, decades, kids, holidays, collections), as ready-to-add channel definitions |
@@ -69,11 +71,35 @@ server's naming policy. Times are UTC ISO 8601.
 
 `offsetMs` is where to seek inside `current.itemId`: `inPointMs` plus the time since the slot started.
 
+## `GET /CableTv/Weather/{channelId}`
+
+Values are in the channel's units: `metric: true` means °C, km/h and hPa; otherwise °F, mph and inHg. `code` is
+a WMO weather code. Forecasts are cached for 15 minutes.
+
+```json
+{
+  "location": "Chicago",
+  "metric": false,
+  "updatedUtc": "2026-09-26T20:10:00Z",
+  "current": { "temperature": 68, "feelsLike": 67, "humidity": 55, "windSpeed": 9, "windDirection": "SW",
+               "pressure": 30.01, "code": 2, "condition": "Partly cloudy" },
+  "daily": [ { "date": "2026-09-26", "high": 72, "low": 58, "code": 2, "condition": "Pt Cloudy", "precipitationChance": 10 } ],
+  "hourly": [ { "time": "2026-09-26T15:00", "temperature": 69, "code": 1, "precipitationChance": 5 } ],
+  "sunrise": "06:47",
+  "sunset": "18:44"
+}
+```
+
 ## Rules
 
-- `kind` is one of `program`, `commercial`, `bumper`, `filler`, `stream` (outside HLS/TS URL) or
-  `generated` (for example weather). The plugin currently emits `program`, `commercial` and `filler`;
-  clients must skip kinds they don't know.
+- `kind` is one of `program`, `commercial`, `bumper`, `filler`, `stream` (outside HLS/TS URL, in `url`) or
+  `generated` (drawn by the client or server, for example weather). Clients must skip kinds they don't know.
+- Stream channels have one `stream` slot per hour; play `url` live and don't seek. Weather channels have
+  `generated` slots; clients draw the forecast from `/CableTv/Weather/{channelId}`.
+- `audio: true` marks a song: play it with `/Audio/{itemId}/universal` (or the audio stream endpoint);
+  `artist` and `album` describe it.
+- `trailer: true` marks a movie trailer; `ownerId` is the movie it belongs to, so a client can find a channel
+  airing that movie. `seriesId` is an episode's series.
 - `filler` has no item: render static or black for its duration (it pads a break to the grid, or fills a
   stretch where the channel is off air).
 - `premiere: true` marks an airing of a newly added item; `lineup` names the time slot or seasonal lineup a
@@ -83,6 +109,9 @@ server's naming policy. Times are UTC ISO 8601.
 - `mediaSourceId` is omitted when it's the item itself (the usual case); play the item's default source then.
 - Fields that are null are omitted from the JSON (Jellyfin's serializer), for example `itemId` and `title`
   on filler and `episode` on movies.
+- In `/CableTv/Guide`, runs of songs or trailers are folded into half-hour blocks with `kind: "music"` or
+  `kind: "trailers"` (no `itemId`); stream and weather programmes carry `kind: "stream"` / `"generated"`.
+  Guide programmes also carry `seriesId` and, for songs, `artist`.
 - `guideGroup` ties breaks to their programme, so a guide shows one block and the player sees every item.
 - A mid-show break splits a programme into two `program` slots on the same `itemId` with different in/out points.
 - Clients compute "now" as `serverTime` plus elapsed device time, never from the device clock alone.

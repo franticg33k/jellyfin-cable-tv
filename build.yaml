@@ -14,7 +14,10 @@ owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
-  0.5.0.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint,
+  0.5.0.0: stream (HLS/URL), weather and music channels; trailer channels ("Coming attractions") and trailer
+  sources; artist sources and music suggestions; content groups; a browser TV page at /CableTv/Web; commercials
+  pre-converted by a scheduled task; a configurable service name; the guide folds songs and trailers into blocks.
+  0.4.1.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint,
   channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag.
   0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and
   pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.
