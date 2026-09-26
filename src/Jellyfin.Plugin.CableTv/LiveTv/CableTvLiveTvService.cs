@@ -56,7 +56,7 @@ public class CableTvLiveTvService : ILiveTvService
     public string Name => "Cable TV";
 
     /// <inheritdoc />
-    public string HomePageUrl => "https://github.com/arun-iv/jellyfin-cable-tv";
+    public string HomePageUrl => "https://github.com/franticg33k/jellyfin-cable-tv";
 
     /// <inheritdoc />
     public Task<IEnumerable<ChannelInfo>> GetChannelsAsync(CancellationToken cancellationToken)

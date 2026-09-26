@@ -15,21 +15,21 @@ The work is built from scratch; no NostalgiaTV code or assets are used.
 
 ## Install
 
-Requires **Jellyfin 12.x**. The installable package is [`dist/cabletv_0.3.0.0.zip`](dist/).
+Requires **Jellyfin 12.x**. The installable package is [`dist/cabletv_0.3.1.0.zip`](dist/).
 
 **Option A: drop it in (works today).**
 
 1. Stop Jellyfin.
-2. Unzip `cabletv_0.3.0.0.zip` into a new folder `<jellyfin config>/plugins/Cable TV_0.3.0.0/`
+2. Unzip `cabletv_0.3.1.0.zip` into a new folder `<jellyfin config>/plugins/Cable TV_0.3.1.0/`
    (Docker: `/config/plugins/…`; Linux packages: `/var/lib/jellyfin/plugins/…`;
    Windows: `%ProgramData%\Jellyfin\Server\plugins\…`).
-3. Start Jellyfin. **Dashboard → Plugins** lists *Cable TV 0.3.0.0*.
+3. Start Jellyfin. **Dashboard → Plugins** lists *Cable TV 0.3.1.0*.
 
 **Option B: plugin repository (installs and updates from the dashboard).**
 
 Add the manifest URL under **Dashboard → Plugins → Repositories**, then install *Cable TV* from the catalog and
 restart. The manifest in `dist/manifest.json` points at
-`https://raw.githubusercontent.com/arun-iv/jellyfin-cable-tv/main/dist/`, so it works once this repository is
+`https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/`, so it works once this repository is
 public and the files are on `main`. For a private repository, host `dist/` anywhere your server can reach and
 rebuild the manifest with `python3 scripts/package.py --base-url <that URL>`.
 
@@ -99,7 +99,7 @@ The JSON form of a channel, for reference:
 |---|---|---|
 | 0. Foundations | Plugin scaffold for Jellyfin 12.x, local test server | Done |
 | 1. Plugin MVP | Channels, pools, random/cyclic schedule, `Schedule`/`Now` API, Live TV registration | Done |
-| 2. Fork MVP | Guide, direct play at offset, preloading, static overlay | In progress: patches in [`clients/wholphin`](clients/wholphin/) (core tested; Android UI not compiled yet) |
+| 2. Fork MVP | Guide, direct play at offset, preloading, static overlay | Built and CI-green in the [Wholphin fork](https://github.com/franticg33k/Wholphin) (`cable-tv` branch); first device test pending |
 | 3. Fallback stream | Continuous copy-video / AAC-audio stream, shared per channel, timestamps that never rewind | Done |
 | 4. Commercials | Break planning, halfway and chapter mid-breaks, fill-to-grid, one guide entry per programme | Done (pre-converting the ad library is not done; Auto mode transcodes mismatched ads on the fly) |
 | 5. Scheduling depth | Sorting modes, weights, time slots, restricted hours, seasonal lineups, premieres, settings form, preview | Done |
