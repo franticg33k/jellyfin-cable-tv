@@ -23,13 +23,15 @@ public sealed record ChannelListResponse(
 /// <param name="LogoUrl">Logo URL, if any.</param>
 /// <param name="ScheduleVersion">Changes whenever the channel's timeline changes.</param>
 /// <param name="PoolSize">Number of schedulable items; zero means the channel shows nothing.</param>
+/// <param name="Category">Guide group, e.g. "Kids"; omitted when not set.</param>
 public sealed record ChannelDto(
     [property: JsonPropertyName("channelId")] string ChannelId,
     [property: JsonPropertyName("number")] string Number,
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("logoUrl")] string? LogoUrl,
     [property: JsonPropertyName("scheduleVersion")] string ScheduleVersion,
-    [property: JsonPropertyName("poolSize")] int PoolSize);
+    [property: JsonPropertyName("poolSize")] int PoolSize,
+    [property: JsonPropertyName("category")] string? Category = null);
 
 /// <summary>Response of <c>GET /CableTv/Schedule</c>.</summary>
 /// <param name="ServerTime">Server clock when the response was built.</param>

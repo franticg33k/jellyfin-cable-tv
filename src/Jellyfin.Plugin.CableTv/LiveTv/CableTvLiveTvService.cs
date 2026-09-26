@@ -67,8 +67,10 @@ public class CableTvLiveTvService : ILiveTvService
             Number = c.Definition.Number,
             Name = c.Definition.Name,
             ChannelType = ChannelType.TV,
-            ImageUrl = string.IsNullOrWhiteSpace(c.Definition.LogoUrl) ? null : c.Definition.LogoUrl,
-            HasImage = !string.IsNullOrWhiteSpace(c.Definition.LogoUrl),
+            ChannelGroup = string.IsNullOrWhiteSpace(c.Definition.Category) ? null : c.Definition.Category.Trim(),
+            ImagePath = c.Logo?.LocalPath,
+            ImageUrl = c.Logo?.RemoteUrl,
+            HasImage = c.Logo is not null,
         });
 
         return Task.FromResult(channels);

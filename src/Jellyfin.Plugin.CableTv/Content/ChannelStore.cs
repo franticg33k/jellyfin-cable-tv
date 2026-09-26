@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Jellyfin.Plugin.CableTv.Configuration;
+using Jellyfin.Plugin.CableTv.Logos;
 using Jellyfin.Plugin.CableTv.Scheduling;
 using Jellyfin.Plugin.CableTv.Streaming;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ namespace Jellyfin.Plugin.CableTv.Content;
 public class ChannelStore
 {
     private readonly ContentPoolResolver _resolver;
+    private readonly LogoService _logos;
     private readonly ILogger<ChannelStore> _logger;
     private readonly Lock _rebuildLock = new();
     private IReadOnlyList<ChannelSnapshot>? _channels;
@@ -27,10 +29,12 @@ public class ChannelStore
     /// Initializes a new instance of the <see cref="ChannelStore"/> class.
     /// </summary>
     /// <param name="resolver">Pool resolver.</param>
+    /// <param name="logos">Logo service.</param>
     /// <param name="logger">Logger.</param>
-    public ChannelStore(ContentPoolResolver resolver, ILogger<ChannelStore> logger)
+    public ChannelStore(ContentPoolResolver resolver, LogoService logos, ILogger<ChannelStore> logger)
     {
         _resolver = resolver;
+        _logos = logos;
         _logger = logger;
     }
 
@@ -53,7 +57,7 @@ public class ChannelStore
     /// <param name="definition">Channel definition.</param>
     /// <returns>The timeline.</returns>
     public IChannelTimeline Preview(ChannelDefinition definition)
-        => Build(definition, Plugin.Instance?.Configuration ?? new PluginConfiguration()).Timeline;
+        => Build(definition, Plugin.Instance?.Configuration ?? new PluginConfiguration(), _resolver.SharedContext()).Timeline;
 
     /// <summary>
     /// Re-resolves every enabled channel's pool from the current configuration.
@@ -63,14 +67,17 @@ public class ChannelStore
     {
         lock (_rebuildLock)
         {
+            var started = System.Diagnostics.Stopwatch.StartNew();
             var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
             var channels = new List<ChannelSnapshot>();
+            var context = _resolver.CreateContext();
+            _logos.ClearCache();
 
             foreach (var definition in config.Channels.Where(c => c.Enabled && !string.IsNullOrWhiteSpace(c.Id)))
             {
                 try
                 {
-                    var snapshot = Build(definition, config);
+                    var snapshot = Build(definition, config, context) with { Logo = ResolveLogo(definition, config) };
                     var timeline = snapshot.Timeline;
                     channels.Add(snapshot);
                     _logger.LogInformation(
@@ -91,7 +98,23 @@ public class ChannelStore
                 .ThenBy(c => c.Definition.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             Volatile.Write(ref _channels, ordered);
+            _resolver.Trim(context);
+            _resolver.ShareContext(context);
+            _logger.LogInformation("Built {Count} Cable TV channels in {Elapsed} ms", ordered.Count, started.ElapsedMilliseconds);
             return ordered;
+        }
+    }
+
+    private LogoRef? ResolveLogo(ChannelDefinition definition, PluginConfiguration config)
+    {
+        try
+        {
+            return _logos.Resolve(definition, config);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Couldn't find a logo for channel {Id}", definition.Id);
+            return null;
         }
     }
 
@@ -122,7 +145,7 @@ public class ChannelStore
         return definition;
     }
 
-    private ScheduleRules BuildRules(ChannelDefinition definition, PluginConfiguration config, IReadOnlyList<PoolItem> pool)
+    private ScheduleRules BuildRules(ChannelDefinition definition, PluginConfiguration config, IReadOnlyList<PoolItem> pool, ResolveContext context)
     {
         var slots = new List<TimeSlotRule>();
         foreach (var slot in definition.TimeSlots)
@@ -134,7 +157,7 @@ public class ChannelStore
             }
 
             var name = string.IsNullOrWhiteSpace(slot.Name) ? FormattableString.Invariant($"{slot.Start}-{slot.End}") : slot.Name;
-            var slotPool = _resolver.Resolve(AnyKind(definition.WithSources(slot.Sources)));
+            var slotPool = _resolver.Resolve(AnyKind(definition.WithSources(slot.Sources)), context);
             slots.Add(new TimeSlotRule(name, new TimeWindow(start, end), ScheduleRules.ParseDays(slot.Days), slotPool, slot.Sorting));
         }
 
@@ -147,7 +170,7 @@ public class ChannelStore
                 continue;
             }
 
-            var seasonal = _resolver.Resolve(AnyKind(definition.WithSources(season.Sources)));
+            var seasonal = _resolver.Resolve(AnyKind(definition.WithSources(season.Sources)), context);
             var mainIds = pool.Select(p => p.ItemId).ToHashSet();
             var seasonPool = season.Mode == SeasonMode.Replace
                 ? seasonal
@@ -161,7 +184,7 @@ public class ChannelStore
         var restricted = definition.Sources.Where(s => !string.IsNullOrWhiteSpace(s.AirHours)).ToList();
         if (restricted.Count > 0)
         {
-            var free = _resolver.Resolve(definition.WithSources(definition.Sources.Where(s => string.IsNullOrWhiteSpace(s.AirHours)).ToArray()))
+            var free = _resolver.Resolve(definition.WithSources(definition.Sources.Where(s => string.IsNullOrWhiteSpace(s.AirHours)).ToArray()), context)
                 .Select(p => p.ItemId)
                 .ToHashSet();
             foreach (var group in restricted.GroupBy(s => s.AirHours!.Trim(), StringComparer.Ordinal))
@@ -172,7 +195,7 @@ public class ChannelStore
                     continue;
                 }
 
-                var ids = _resolver.Resolve(definition.WithSources(group.ToArray()))
+                var ids = _resolver.Resolve(definition.WithSources(group.ToArray()), context)
                     .Select(p => p.ItemId)
                     .Where(id => !free.Contains(id))
                     .ToHashSet();
@@ -199,15 +222,15 @@ public class ChannelStore
         };
     }
 
-    private ChannelSnapshot Build(ChannelDefinition definition, PluginConfiguration config)
+    private ChannelSnapshot Build(ChannelDefinition definition, PluginConfiguration config, ResolveContext context)
     {
-        var pool = _resolver.Resolve(definition);
+        var pool = _resolver.Resolve(definition, context);
 
         IReadOnlyList<PoolItem> commercials = [];
         if (definition.CommercialsEnabled)
         {
             var sources = definition.CommercialSources.Length > 0 ? definition.CommercialSources : config.CommercialSources;
-            commercials = _resolver.ResolveCommercials(sources);
+            commercials = _resolver.ResolveCommercials(sources, context);
         }
 
         var options = new TimelineOptions
@@ -221,7 +244,7 @@ public class ChannelStore
         };
 
         var anchor = definition.AnchorUtc ?? config.ScheduleAnchorUtc;
-        var rules = BuildRules(definition, config, pool);
+        var rules = BuildRules(definition, config, pool, context);
         IChannelTimeline timeline = rules.HasRules
             ? new RuledTimeline(definition.Id, anchor, pool, options, rules)
             : new ChannelTimeline(definition.Id, anchor, pool, options);
