@@ -24,9 +24,15 @@ public class ChannelDefinition
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets an optional logo URL.
+    /// Gets or sets the logo: an http(s) URL, "studio:Name" for the logo Jellyfin has for a studio or TV network, or empty
+    /// to choose automatically (logo pack, then a studio or network with the channel's name, then a generated logo).
     /// </summary>
     public string? LogoUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the channel's category, used to group channels in guides (for example "Networks" or "Movies").
+    /// </summary>
+    public string? Category { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the channel is published.

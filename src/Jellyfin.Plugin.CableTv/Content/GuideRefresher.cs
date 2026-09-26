@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +17,10 @@ public class GuideRefresher
     /// </summary>
     private const string RefreshGuideTaskKey = "RefreshGuide";
 
+    private readonly Lock _gate = new();
     private readonly ChannelStore _store;
+    private bool _running;
+    private bool _pending;
     private readonly ITaskManager _taskManager;
     private readonly ILogger<GuideRefresher> _logger;
 
@@ -30,6 +35,50 @@ public class GuideRefresher
         _store = store;
         _taskManager = taskManager;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Rebuilds in the background and returns at once. Requests that arrive while a rebuild runs are folded into one
+    /// more rebuild afterwards, so saving settings several times in a row costs at most two rebuilds and never blocks.
+    /// </summary>
+    public void RequestRebuild()
+    {
+        lock (_gate)
+        {
+            if (_running)
+            {
+                _pending = true;
+                return;
+            }
+
+            _running = true;
+        }
+
+        _ = Task.Run(() =>
+        {
+            while (true)
+            {
+                try
+                {
+                    RebuildAndRefreshGuide();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Cable TV rebuild failed");
+                }
+
+                lock (_gate)
+                {
+                    if (!_pending)
+                    {
+                        _running = false;
+                        return;
+                    }
+
+                    _pending = false;
+                }
+            }
+        });
     }
 
     /// <summary>
