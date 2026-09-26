@@ -1,0 +1,2441 @@
+From 23df0c1d68eb126fced84e4a3ba1fc3be4e0d2a8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 26 Sep 2026 10:42:43 +0000
+Subject: [PATCH] Add Cable TV mode (:tvmode-core, :tvmode) with minimal app
+ hooks
+
+A full-screen TV for channels scheduled by the Cable TV Jellyfin plugin.
+The app plans tune-in from the cached schedule and the server clock,
+direct-plays the airing file clipped to its slot at the right offset,
+and queues the next items so they preload. Static covers buffering and
+filler.
+
+- :tvmode-core (plain Kotlin, unit tested): API models and client,
+  ServerClock, ScheduleCache, TuneInPlanner, ChannelNavigator and guide
+  grouping.
+- :tvmode (Android): CableTvScreen (player surface, static overlay,
+  channel banner with number entry, guide overlay, remote keys),
+  CableTvViewModel, and the TvModeHost interface.
+- App hooks: WholphinTvModeHost with its Hilt binding, Destination.CableTv,
+  and a nav drawer item shown only when the server runs the plugin.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01LV8NRSXzcgUSp1rQ2q9Qft
+---
+ app/build.gradle.kts                          |   1 +
+ .../wholphin/services/NavDrawerService.kt     |   3 +
+ .../wholphin/services/WholphinTvModeHost.kt   |  92 +++++
+ .../wholphin/services/hilt/TvModeModule.kt    |  15 +
+ .../wholphin/ui/nav/Destination.kt            |   4 +
+ .../wholphin/ui/nav/DestinationContent.kt     |   5 +
+ .../damontecres/wholphin/ui/nav/NavDrawer.kt  |  16 +
+ app/src/main/res/values/strings.xml           |   1 +
+ gradle/libs.versions.toml                     |   1 +
+ settings.gradle.kts                           |   2 +
+ tvmode-core/build.gradle.kts                  |  24 ++
+ .../wholphin/tvmode/core/CableTvClient.kt     |  79 ++++
+ .../wholphin/tvmode/core/ChannelNavigator.kt  |  74 ++++
+ .../damontecres/wholphin/tvmode/core/Guide.kt |  57 +++
+ .../wholphin/tvmode/core/Models.kt            | 158 ++++++++
+ .../wholphin/tvmode/core/ScheduleCache.kt     | 119 ++++++
+ .../wholphin/tvmode/core/ServerClock.kt       |  60 +++
+ .../wholphin/tvmode/core/TuneInPlanner.kt     | 115 ++++++
+ .../wholphin/tvmode/core/CableTvClientTest.kt |  56 +++
+ .../tvmode/core/ChannelNavigatorTest.kt       |  60 +++
+ .../wholphin/tvmode/core/Fixtures.kt          |  41 ++
+ .../wholphin/tvmode/core/GuideTest.kt         |  32 ++
+ .../wholphin/tvmode/core/ScheduleCacheTest.kt |  54 +++
+ .../wholphin/tvmode/core/ServerClockTest.kt   |  38 ++
+ .../wholphin/tvmode/core/TuneInPlannerTest.kt |  87 ++++
+ tvmode/README.md                              |  44 ++
+ tvmode/build.gradle.kts                       |  52 +++
+ tvmode/src/main/AndroidManifest.xml           |   2 +
+ .../wholphin/tvmode/CableTvAvailability.kt    |  23 ++
+ .../wholphin/tvmode/CableTvScreen.kt          | 367 +++++++++++++++++
+ .../wholphin/tvmode/CableTvViewModel.kt       | 375 ++++++++++++++++++
+ .../damontecres/wholphin/tvmode/TvModeHost.kt |  28 ++
+ 32 files changed, 2085 insertions(+)
+ create mode 100644 app/src/main/java/com/github/damontecres/wholphin/services/WholphinTvModeHost.kt
+ create mode 100644 app/src/main/java/com/github/damontecres/wholphin/services/hilt/TvModeModule.kt
+ create mode 100644 tvmode-core/build.gradle.kts
+ create mode 100644 tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClient.kt
+ create mode 100644 tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigator.kt
+ create mode 100644 tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Guide.kt
+ create mode 100644 tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Models.kt
+ create mode 100644 tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCache.kt
+ create mode 100644 tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClock.kt
+ create mode 100644 tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlanner.kt
+ create mode 100644 tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClientTest.kt
+ create mode 100644 tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigatorTest.kt
+ create mode 100644 tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/Fixtures.kt
+ create mode 100644 tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/GuideTest.kt
+ create mode 100644 tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCacheTest.kt
+ create mode 100644 tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClockTest.kt
+ create mode 100644 tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlannerTest.kt
+ create mode 100644 tvmode/README.md
+ create mode 100644 tvmode/build.gradle.kts
+ create mode 100644 tvmode/src/main/AndroidManifest.xml
+ create mode 100644 tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvAvailability.kt
+ create mode 100644 tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvScreen.kt
+ create mode 100644 tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvViewModel.kt
+ create mode 100644 tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/TvModeHost.kt
+
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index e005cb6f..f47e886b 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -334,6 +334,7 @@ dependencies {
+     implementation(libs.kotlinx.serialization.json)
+ 
+     implementation(libs.hilt.android)
++    implementation(project(":tvmode"))
+     implementation(libs.androidx.room.common.jvm)
+     implementation(libs.androidx.room.ktx)
+     implementation(libs.androidx.compose.material3)
+diff --git a/app/src/main/java/com/github/damontecres/wholphin/services/NavDrawerService.kt b/app/src/main/java/com/github/damontecres/wholphin/services/NavDrawerService.kt
+index 6b8701ee..5e322e47 100644
+--- a/app/src/main/java/com/github/damontecres/wholphin/services/NavDrawerService.kt
++++ b/app/src/main/java/com/github/damontecres/wholphin/services/NavDrawerService.kt
+@@ -6,6 +6,7 @@ import com.github.damontecres.wholphin.data.ServerRepository
+ import com.github.damontecres.wholphin.data.model.JellyfinUser
+ import com.github.damontecres.wholphin.data.model.NavPinType
+ import com.github.damontecres.wholphin.services.hilt.DefaultCoroutineScope
++import com.github.damontecres.wholphin.tvmode.CableTvAvailability
+ import com.github.damontecres.wholphin.ui.collectLatestIn
+ import com.github.damontecres.wholphin.ui.launchDefault
+ import com.github.damontecres.wholphin.ui.main.settings.Library
+@@ -51,6 +52,7 @@ class NavDrawerService
+         private val serverPreferencesDao: ServerPreferencesDao,
+         private val seerrServerRepository: SeerrServerRepository,
+         private val musicService: MusicService,
++        private val cableTvAvailability: CableTvAvailability,
+     ) {
+         private val _state = MutableStateFlow(NavDrawerItemState())
+         val state: StateFlow<NavDrawerItemState> = _state
+@@ -195,6 +197,7 @@ class NavDrawerService
+                 buildList {
+                     add(NavDrawerItem.Favorites)
+                     if (discoverActive) add(NavDrawerItem.Discover)
++                    if (cableTvAvailability.isAvailable()) add(NavDrawerItem.CableTv)
+                 }
+             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)
+             val libraries =
+diff --git a/app/src/main/java/com/github/damontecres/wholphin/services/WholphinTvModeHost.kt b/app/src/main/java/com/github/damontecres/wholphin/services/WholphinTvModeHost.kt
+new file mode 100644
+index 00000000..2aeffd0e
+--- /dev/null
++++ b/app/src/main/java/com/github/damontecres/wholphin/services/WholphinTvModeHost.kt
+@@ -0,0 +1,92 @@
++package com.github.damontecres.wholphin.services
++
++import androidx.media3.common.Player
++import com.github.damontecres.wholphin.preferences.PlayerBackend
++import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
++import com.github.damontecres.wholphin.tvmode.TvModeHost
++import com.github.damontecres.wholphin.tvmode.core.CableTvTransport
++import com.github.damontecres.wholphin.util.WholphinDispatchers
++import kotlinx.coroutines.withContext
++import okhttp3.HttpUrl.Companion.toHttpUrl
++import okhttp3.OkHttpClient
++import okhttp3.Request
++import org.jellyfin.sdk.api.client.ApiClient
++import org.jellyfin.sdk.api.client.extensions.videosApi
++import java.io.IOException
++import java.util.UUID
++import javax.inject.Inject
++import javax.inject.Singleton
++
++/**
++ * Connects the Cable TV mode (the :tvmode module) to Wholphin: the signed-in server, the player factory and navigation.
++ */
++@Singleton
++class WholphinTvModeHost
++    @Inject
++    constructor(
++        private val api: ApiClient,
++        @param:AuthOkHttpClient private val okHttpClient: OkHttpClient,
++        private val playerFactory: PlayerFactory,
++        private val userPreferencesService: UserPreferencesService,
++        private val navigationManager: NavigationManager,
++    ) : TvModeHost {
++        override val transport =
++            CableTvTransport { path, query ->
++                val base = api.baseUrl ?: throw IOException("Not signed in to a server")
++                val url =
++                    base
++                        .trimEnd('/')
++                        .plus("/")
++                        .plus(path)
++                        .toHttpUrl()
++                        .newBuilder()
++                        .apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }
++                        .build()
++                withContext(WholphinDispatchers.IO) {
++                    okHttpClient
++                        .newCall(
++                            Request
++                                .Builder()
++                                .url(url)
++                                .get()
++                                .build(),
++                        ).execute()
++                        .use { response ->
++                            if (!response.isSuccessful) throw IOException("HTTP ${response.code} for $path")
++                            response.body.string()
++                        }
++                }
++            }
++
++        override fun streamUrl(
++            itemId: String,
++            mediaSourceId: String?,
++        ): String =
++            api.videosApi.getVideoStreamUrl(
++                itemId = UUID.fromString(itemId.toDashedUuid()),
++                mediaSourceId = mediaSourceId,
++                static = true,
++            )
++
++        override suspend fun createPlayer(): Player {
++            // TV mode clips items to their scheduled in/out points, which ExoPlayer supports; use it whatever the
++            // default backend is.
++            val prefs = userPreferencesService.getCurrent().appPreferences
++            return playerFactory.createVideoPlayer(PlayerBackend.EXO_PLAYER, prefs).player
++        }
++
++        override fun releasePlayer(player: Player) {
++            player.release()
++        }
++
++        override fun exit() {
++            navigationManager.goBack()
++        }
++
++        private fun String.toDashedUuid(): String =
++            if (length == 32) {
++                "${substring(0, 8)}-${substring(8, 12)}-${substring(12, 16)}-${substring(16, 20)}-${substring(20)}"
++            } else {
++                this
++            }
++    }
+diff --git a/app/src/main/java/com/github/damontecres/wholphin/services/hilt/TvModeModule.kt b/app/src/main/java/com/github/damontecres/wholphin/services/hilt/TvModeModule.kt
+new file mode 100644
+index 00000000..39526380
+--- /dev/null
++++ b/app/src/main/java/com/github/damontecres/wholphin/services/hilt/TvModeModule.kt
+@@ -0,0 +1,15 @@
++package com.github.damontecres.wholphin.services.hilt
++
++import com.github.damontecres.wholphin.services.WholphinTvModeHost
++import com.github.damontecres.wholphin.tvmode.TvModeHost
++import dagger.Binds
++import dagger.Module
++import dagger.hilt.InstallIn
++import dagger.hilt.components.SingletonComponent
++
++@Module
++@InstallIn(SingletonComponent::class)
++abstract class TvModeModule {
++    @Binds
++    abstract fun tvModeHost(host: WholphinTvModeHost): TvModeHost
++}
+diff --git a/app/src/main/java/com/github/damontecres/wholphin/ui/nav/Destination.kt b/app/src/main/java/com/github/damontecres/wholphin/ui/nav/Destination.kt
+index a65c97e8..a01a7362 100644
+--- a/app/src/main/java/com/github/damontecres/wholphin/ui/nav/Destination.kt
++++ b/app/src/main/java/com/github/damontecres/wholphin/ui/nav/Destination.kt
+@@ -145,6 +145,10 @@ sealed class Destination(
+     @Serializable
+     data object Favorites : Destination(false)
+ 
++    /** Cable TV mode, for servers running the Cable TV plugin. */
++    @Serializable
++    data object CableTv : Destination(true)
++
+     @Serializable
+     data object Discover : Destination(false)
+ 
+diff --git a/app/src/main/java/com/github/damontecres/wholphin/ui/nav/DestinationContent.kt b/app/src/main/java/com/github/damontecres/wholphin/ui/nav/DestinationContent.kt
+index 63789d6c..ce45f34a 100644
+--- a/app/src/main/java/com/github/damontecres/wholphin/ui/nav/DestinationContent.kt
++++ b/app/src/main/java/com/github/damontecres/wholphin/ui/nav/DestinationContent.kt
+@@ -10,6 +10,7 @@ import com.github.damontecres.wholphin.data.filter.DefaultForStudiosFilterOption
+ import com.github.damontecres.wholphin.data.model.SeerrItemType
+ import com.github.damontecres.wholphin.preferences.PlayerBackend
+ import com.github.damontecres.wholphin.preferences.UserPreferences
++import com.github.damontecres.wholphin.tvmode.CableTvScreen
+ import com.github.damontecres.wholphin.ui.components.ItemGrid
+ import com.github.damontecres.wholphin.ui.components.LicenseInfo
+ import com.github.damontecres.wholphin.ui.data.MovieSortOptions
+@@ -350,6 +351,10 @@ fun DestinationContent(
+             )
+         }
+ 
++        Destination.CableTv -> {
++            CableTvScreen(modifier = modifier)
++        }
++
+         Destination.NowPlaying -> {
+             NowPlayingPage(modifier)
+         }
+diff --git a/app/src/main/java/com/github/damontecres/wholphin/ui/nav/NavDrawer.kt b/app/src/main/java/com/github/damontecres/wholphin/ui/nav/NavDrawer.kt
+index efbf1a4b..0918595e 100644
+--- a/app/src/main/java/com/github/damontecres/wholphin/ui/nav/NavDrawer.kt
++++ b/app/src/main/java/com/github/damontecres/wholphin/ui/nav/NavDrawer.kt
+@@ -138,6 +138,10 @@ class NavDrawerViewModel
+                     )
+                 }
+ 
++                NavDrawerItem.CableTv -> {
++                    navigationManager.navigateTo(Destination.CableTv)
++                }
++
+                 is ServerNavDrawerItem -> {
+                     setIndex(index)
+                     navigationManager.navigateToFromDrawer(item.destination)
+@@ -169,6 +173,7 @@ class NavDrawerViewModel
+                             is ServerNavDrawerItem -> it.destination
+                             is NavDrawerItem.Favorites -> Destination.Favorites
+                             is NavDrawerItem.Discover -> Destination.Discover
++                            is NavDrawerItem.CableTv -> Destination.CableTv
+                             else -> null
+                         }
+                     }
+@@ -243,6 +248,13 @@ sealed interface NavDrawerItem {
+ 
+         override fun name(context: Context): String = context.getString(R.string.discover)
+     }
++
++    object CableTv : NavDrawerItem {
++        override val id: String
++            get() = "a_cable_tv"
++
++        override fun name(context: Context): String = context.getString(R.string.cable_tv)
++    }
+ }
+ 
+ /**
+@@ -674,6 +686,10 @@ fun NavigationDrawerScope.NavItem(
+                     R.string.fa_magnifying_glass_plus
+                 }
+ 
++                NavDrawerItem.CableTv -> {
++                    R.string.fa_tv
++                }
++
+                 is ServerNavDrawerItem -> {
+                     when (library.type) {
+                         CollectionType.MOVIES -> R.string.fa_film
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index cff98add..4b0b0362 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -489,6 +489,7 @@
+     <string name="force_dovi_profile_7_summary">Ignores device compatibility checks</string>
+ 
+     <string name="discover">Discover</string>
++    <string name="cable_tv">Cable TV</string>
+     <string name="request">Request</string>
+     <string name="pending">Pending</string>
+     <string name="seerr_integration">Seerr integration</string>
+diff --git a/gradle/libs.versions.toml b/gradle/libs.versions.toml
+index dc7608cf..eb0980ce 100644
+--- a/gradle/libs.versions.toml
++++ b/gradle/libs.versions.toml
+@@ -142,6 +142,7 @@ androidx-preference-ktx = { group = "androidx.preference", name = "preference-kt
+ androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+ androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "paletteKtx" }
+ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
++kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesTest" }
+ androidx-core-testing = { module = "androidx.arch.core:core-testing", version.ref = "coreTesting" }
+ androidx-runner = { group = "androidx.test", name = "runner", version.ref = "runner" }
+ 
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+index 7fddcdcd..d85ca77f 100644
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -30,3 +30,5 @@ dependencyResolutionManagement {
+ rootProject.name = "Wholphin"
+ include(":app")
+ include(":wholphin-mpv-stub")
++include(":tvmode-core")
++include(":tvmode")
+diff --git a/tvmode-core/build.gradle.kts b/tvmode-core/build.gradle.kts
+new file mode 100644
+index 00000000..c3327208
+--- /dev/null
++++ b/tvmode-core/build.gradle.kts
+@@ -0,0 +1,24 @@
++// Cable TV mode: the platform-independent part (plugin API client, server clock, schedule cache, tune-in planning).
++// Plain Kotlin so it can be unit tested on the JVM without an Android device.
++plugins {
++    alias(libs.plugins.kotlin.jvm)
++    alias(libs.plugins.kotlin.plugin.serialization)
++}
++
++kotlin {
++    compilerOptions {
++        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
++    }
++}
++
++java {
++    sourceCompatibility = JavaVersion.VERSION_11
++    targetCompatibility = JavaVersion.VERSION_11
++}
++
++dependencies {
++    implementation(libs.kotlinx.serialization.json)
++    implementation(libs.kotlinx.coroutines.core)
++    testImplementation(libs.junit)
++    testImplementation(libs.kotlinx.coroutines.test)
++}
+diff --git a/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClient.kt b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClient.kt
+new file mode 100644
+index 00000000..f0c0fd25
+--- /dev/null
++++ b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClient.kt
+@@ -0,0 +1,79 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import kotlinx.serialization.json.Json
++
++/**
++ * Carries a GET request to the Jellyfin server with the user's credentials. The app implements it with its
++ * authenticated HTTP client, so this module needs no Android or networking dependencies.
++ */
++fun interface CableTvTransport {
++    /**
++     * @param path path under the server's base URL, for example "CableTv/Channels"
++     * @param query query parameters
++     * @return the response body
++     */
++    suspend fun get(
++        path: String,
++        query: Map<String, String>,
++    ): String
++}
++
++/** A channel's slots for a window, with the version they belong to. */
++data class ChannelSchedule(
++    val channelId: String,
++    val scheduleVersion: String,
++    val slots: List<TvSlot>,
++)
++
++/** Client for the Cable TV plugin's read-only API. Every response also feeds the [clock]. */
++class CableTvClient(
++    private val transport: CableTvTransport,
++    val clock: ServerClock = ServerClock(),
++) {
++    private val json = Json { ignoreUnknownKeys = true }
++
++    suspend fun channels(): List<TvChannel> {
++        val dto = fetch<ChannelListDto>("CableTv/Channels", emptyMap()) { it.serverTime }
++        return dto.channels.map { it.toChannel() }
++    }
++
++    suspend fun schedule(
++        channelIds: Collection<String>,
++        fromMs: Long,
++        toMs: Long,
++    ): List<ChannelSchedule> {
++        val query =
++            buildMap {
++                if (channelIds.isNotEmpty()) put("channelIds", channelIds.joinToString(","))
++                put(
++                    "from",
++                    java.time.Instant
++                        .ofEpochMilli(fromMs)
++                        .toString(),
++                )
++                put(
++                    "to",
++                    java.time.Instant
++                        .ofEpochMilli(toMs)
++                        .toString(),
++                )
++            }
++        val dto = fetch<ScheduleDto>("CableTv/Schedule", query) { it.serverTime }
++        return dto.channels.map { c -> ChannelSchedule(c.channelId, c.scheduleVersion, c.slots.map { it.toSlot() }) }
++    }
++
++    suspend fun presentation(): PresentationDto = fetch("CableTv/Presentation", emptyMap()) { null }
++
++    private suspend inline fun <reified T> fetch(
++        path: String,
++        query: Map<String, String>,
++        serverTime: (T) -> String?,
++    ): T {
++        val sent = clock.elapsed()
++        val body = transport.get(path, query)
++        val received = clock.elapsed()
++        val dto = json.decodeFromString<T>(body)
++        serverTime(dto)?.let { clock.record(parseTime(it), sent, received) }
++        return dto
++    }
++}
+diff --git a/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigator.kt b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigator.kt
+new file mode 100644
+index 00000000..b67ccc67
+--- /dev/null
++++ b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigator.kt
+@@ -0,0 +1,74 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++/**
++ * Channel up/down, number-pad entry and the last-channel toggle.
++ */
++class ChannelNavigator(
++    channels: List<TvChannel>,
++) {
++    var channels: List<TvChannel> = channels
++        private set
++
++    var current: TvChannel? = channels.firstOrNull()
++        private set
++
++    private var previous: TvChannel? = null
++    private val digits = StringBuilder()
++
++    /** Digits typed so far, for the on-screen entry. */
++    val pendingDigits: String get() = digits.toString()
++
++    /** Replaces the channel list (after a refresh), keeping the current channel when it still exists. */
++    fun update(newChannels: List<TvChannel>) {
++        channels = newChannels
++        current = newChannels.firstOrNull { it.id == current?.id } ?: newChannels.firstOrNull()
++        previous = newChannels.firstOrNull { it.id == previous?.id }
++    }
++
++    fun tune(channel: TvChannel): TvChannel {
++        if (channel.id != current?.id) {
++            previous = current
++            current = channel
++        }
++        digits.clear()
++        return channel
++    }
++
++    fun tuneTo(channelId: String): TvChannel? = channels.firstOrNull { it.id == channelId }?.let(::tune)
++
++    fun up(): TvChannel? = step(1)
++
++    fun down(): TvChannel? = step(-1)
++
++    /** Switches to the channel watched before this one. */
++    fun last(): TvChannel? = previous?.let(::tune)
++
++    /**
++     * Adds a typed digit. Returns the channel to tune to once the entry is complete (as many digits as the longest
++     * channel number), otherwise null; call [commitDigits] when the entry times out.
++     */
++    fun typeDigit(digit: Int): TvChannel? {
++        require(digit in 0..9)
++        digits.append(digit)
++        val longest = channels.maxOfOrNull { it.number.length } ?: 4
++        return if (digits.length >= longest) commitDigits() else null
++    }
++
++    /** Tunes to the typed number, if a channel has it. Clears the entry either way. */
++    fun commitDigits(): TvChannel? {
++        val typed = digits.toString()
++        digits.clear()
++        if (typed.isEmpty()) return null
++        val match =
++            channels.firstOrNull { it.number == typed }
++                ?: typed.toIntOrNull()?.let { n -> channels.firstOrNull { it.number.toIntOrNull() == n } }
++        return match?.let(::tune)
++    }
++
++    private fun step(delta: Int): TvChannel? {
++        if (channels.isEmpty()) return null
++        val index = channels.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
++        val next = channels[Math.floorMod(index + delta, channels.size)]
++        return tune(next)
++    }
++}
+diff --git a/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Guide.kt b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Guide.kt
+new file mode 100644
+index 00000000..a73cf760
+--- /dev/null
++++ b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Guide.kt
+@@ -0,0 +1,57 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++/** One guide cell: a programme with its breaks folded in, or an off-air stretch. */
++data class GuideEntry(
++    val guideGroup: String,
++    val title: String,
++    val episode: String?,
++    val episodeTitle: String?,
++    val startMs: Long,
++    val endMs: Long,
++    val premiere: Boolean,
++    val lineup: String?,
++    val offAir: Boolean,
++)
++
++object Guide {
++    /** Groups slots into guide cells by their guide group, the way the plugin's Live TV guide does. */
++    fun entries(slots: List<TvSlot>): List<GuideEntry> {
++        val result = mutableListOf<GuideEntry>()
++        var group = mutableListOf<TvSlot>()
++
++        fun flush() {
++            if (group.isEmpty()) return
++            val program = group.firstOrNull { it.kind == SlotKind.PROGRAM }
++            result +=
++                GuideEntry(
++                    guideGroup = group.first().guideGroup,
++                    title = program?.title ?: group.firstNotNullOfOrNull { it.title } ?: "Off air",
++                    episode = program?.episode,
++                    episodeTitle = program?.episodeTitle,
++                    startMs = group.first().startMs,
++                    endMs = group.last().endMs,
++                    premiere = group.any { it.premiere },
++                    lineup = group.firstNotNullOfOrNull { it.lineup },
++                    offAir = program == null && group.none { it.isPlayable },
++                )
++            group = mutableListOf()
++        }
++
++        for (slot in slots.sortedBy { it.startMs }) {
++            if (group.isNotEmpty() && group.last().guideGroup != slot.guideGroup) flush()
++            group += slot
++        }
++        flush()
++        return result
++    }
++
++    /** The entry airing at [timeMs] and the one after it, for the channel banner. */
++    fun nowAndNext(
++        entries: List<GuideEntry>,
++        timeMs: Long,
++    ): Pair<GuideEntry?, GuideEntry?> {
++        val index = entries.indexOfFirst { timeMs >= it.startMs && timeMs < it.endMs }
++        if (index < 0) return null to entries.firstOrNull { it.startMs > timeMs }
++        return entries[index] to entries.getOrNull(index + 1)
++    }
++}
+diff --git a/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Models.kt b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Models.kt
+new file mode 100644
+index 00000000..33d1ae14
+--- /dev/null
++++ b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/Models.kt
+@@ -0,0 +1,158 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import kotlinx.serialization.Serializable
++import java.time.Instant
++
++// Wire format of the Cable TV plugin's API (docs/api-contract.md in jellyfin-cable-tv).
++// Nullable fields may be omitted by the server.
++
++@Serializable
++data class ChannelDto(
++    val channelId: String,
++    val number: String,
++    val name: String,
++    val logoUrl: String? = null,
++    val scheduleVersion: String,
++    val poolSize: Int = 0,
++)
++
++@Serializable
++data class ChannelListDto(
++    val serverTime: String,
++    val channels: List<ChannelDto> = emptyList(),
++)
++
++@Serializable
++data class SlotDto(
++    val slotId: String,
++    val kind: String,
++    val start: String,
++    val end: String,
++    val itemId: String? = null,
++    val mediaSourceId: String? = null,
++    val inPointMs: Long = 0,
++    val outPointMs: Long = 0,
++    val title: String? = null,
++    val episode: String? = null,
++    val episodeTitle: String? = null,
++    val guideGroup: String,
++    val premiere: Boolean? = null,
++    val lineup: String? = null,
++)
++
++@Serializable
++data class ChannelScheduleDto(
++    val channelId: String,
++    val number: String,
++    val scheduleVersion: String,
++    val slots: List<SlotDto> = emptyList(),
++)
++
++@Serializable
++data class ScheduleDto(
++    val serverTime: String,
++    val from: String,
++    val to: String,
++    val scheduleVersion: String,
++    val channels: List<ChannelScheduleDto> = emptyList(),
++)
++
++@Serializable
++data class NowDto(
++    val serverTime: String,
++    val channelId: String,
++    val scheduleVersion: String,
++    val current: SlotDto,
++    val offsetMs: Long,
++    val next: List<SlotDto> = emptyList(),
++)
++
++@Serializable
++data class ChannelBrandingDto(
++    val channelId: String,
++    val logoUrl: String? = null,
++)
++
++@Serializable
++data class PresentationDto(
++    val serviceName: String = "Cable TV",
++    val channels: List<ChannelBrandingDto> = emptyList(),
++)
++
++/** What a slot plays. */
++enum class SlotKind {
++    PROGRAM,
++    COMMERCIAL,
++    BUMPER,
++    FILLER,
++    STREAM,
++    GENERATED,
++    UNKNOWN,
++    ;
++
++    companion object {
++        fun parse(value: String): SlotKind = entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: UNKNOWN
++    }
++}
++
++/** A channel as the TV mode uses it. */
++data class TvChannel(
++    val id: String,
++    val number: String,
++    val name: String,
++    val logoUrl: String?,
++    val scheduleVersion: String,
++    val poolSize: Int,
++)
++
++/**
++ * One entry on a channel's timeline, with times as epoch milliseconds on the server's clock.
++ *
++ * [inPointMs]..[outPointMs] is the part of the item this slot plays.
++ */
++data class TvSlot(
++    val id: String,
++    val kind: SlotKind,
++    val startMs: Long,
++    val endMs: Long,
++    val itemId: String?,
++    val mediaSourceId: String?,
++    val inPointMs: Long,
++    val outPointMs: Long,
++    val title: String?,
++    val episode: String?,
++    val episodeTitle: String?,
++    val guideGroup: String,
++    val premiere: Boolean,
++    val lineup: String?,
++) {
++    val durationMs: Long get() = endMs - startMs
++
++    /** Whether the player can play this slot; filler and unknown kinds are shown as static instead. */
++    val isPlayable: Boolean
++        get() = itemId != null && kind in setOf(SlotKind.PROGRAM, SlotKind.COMMERCIAL, SlotKind.BUMPER)
++
++    fun covers(timeMs: Long): Boolean = timeMs in startMs until endMs
++}
++
++internal fun parseTime(value: String): Long = Instant.parse(value).toEpochMilli()
++
++internal fun ChannelDto.toChannel() = TvChannel(channelId, number, name, logoUrl, scheduleVersion, poolSize)
++
++internal fun SlotDto.toSlot() =
++    TvSlot(
++        id = slotId,
++        kind = SlotKind.parse(kind),
++        startMs = parseTime(start),
++        endMs = parseTime(end),
++        itemId = itemId,
++        mediaSourceId = mediaSourceId,
++        inPointMs = inPointMs,
++        outPointMs = outPointMs,
++        title = title,
++        episode = episode,
++        episodeTitle = episodeTitle,
++        guideGroup = guideGroup,
++        premiere = premiere == true,
++        lineup = lineup,
++    )
+diff --git a/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCache.kt b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCache.kt
+new file mode 100644
+index 00000000..ac289865
+--- /dev/null
++++ b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCache.kt
+@@ -0,0 +1,119 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++/**
++ * Slots fetched so far, per channel, so tuning in needs no network round trip.
++ *
++ * A channel's cached slots are replaced whole when its `scheduleVersion` changes (the plugin rebuilt it); otherwise
++ * newly fetched windows are merged in.
++ */
++class ScheduleCache {
++    private class Entry(
++        val version: String,
++        val slots: List<TvSlot>,
++        val coveredFromMs: Long,
++        val coveredToMs: Long,
++    )
++
++    private val entries = mutableMapOf<String, Entry>()
++
++    /** Adds a fetched window. */
++    @Synchronized
++    fun merge(
++        schedule: ChannelSchedule,
++        fromMs: Long,
++        toMs: Long,
++    ) {
++        val existing = entries[schedule.channelId]
++        val sorted = schedule.slots.sortedBy { it.startMs }
++        val windowFrom = minOf(fromMs, sorted.firstOrNull()?.startMs ?: fromMs)
++        val windowTo = maxOf(toMs, sorted.lastOrNull()?.endMs ?: toMs)
++        if (existing == null || existing.version != schedule.scheduleVersion) {
++            entries[schedule.channelId] = Entry(schedule.scheduleVersion, sorted, windowFrom, windowTo)
++            return
++        }
++
++        val byId = LinkedHashMap<String, TvSlot>()
++        existing.slots.forEach { byId[it.id] = it }
++        sorted.forEach { byId[it.id] = it }
++        val merged = byId.values.sortedBy { it.startMs }
++        // Coverage only grows when the windows touch; otherwise keep the part that includes the new window.
++        val touches = windowFrom <= existing.coveredToMs && windowTo >= existing.coveredFromMs
++        entries[schedule.channelId] =
++            if (touches) {
++                Entry(existing.version, merged, minOf(windowFrom, existing.coveredFromMs), maxOf(windowTo, existing.coveredToMs))
++            } else {
++                Entry(existing.version, sorted, windowFrom, windowTo)
++            }
++    }
++
++    /** The version cached for a channel, or null. */
++    @Synchronized
++    fun version(channelId: String): String? = entries[channelId]?.version
++
++    /** Forgets a channel, for example after its version changed on the server. */
++    @Synchronized
++    fun invalidate(channelId: String) {
++        entries.remove(channelId)
++    }
++
++    /** The slot airing at [timeMs], if cached. */
++    @Synchronized
++    fun slotAt(
++        channelId: String,
++        timeMs: Long,
++    ): TvSlot? {
++        val slots = entries[channelId]?.slots ?: return null
++        val index = indexAt(slots, timeMs)
++        return if (index >= 0) slots[index] else null
++    }
++
++    /** The slot airing at [timeMs] and the ones after it, up to [untilMs]. */
++    @Synchronized
++    fun slotsFrom(
++        channelId: String,
++        timeMs: Long,
++        untilMs: Long = Long.MAX_VALUE,
++    ): List<TvSlot> {
++        val slots = entries[channelId]?.slots ?: return emptyList()
++        val index = indexAt(slots, timeMs).let { if (it < 0) slots.indexOfFirst { s -> s.startMs >= timeMs } else it }
++        if (index < 0) return emptyList()
++        return slots.subList(index, slots.size).takeWhile { it.startMs < untilMs }
++    }
++
++    /** Slots overlapping [fromMs]..[toMs], for the guide. */
++    @Synchronized
++    fun slotsBetween(
++        channelId: String,
++        fromMs: Long,
++        toMs: Long,
++    ): List<TvSlot> = entries[channelId]?.slots?.filter { it.endMs > fromMs && it.startMs < toMs } ?: emptyList()
++
++    /** Whether the cache covers [nowMs] plus at least [aheadMs] for a channel. */
++    @Synchronized
++    fun covers(
++        channelId: String,
++        nowMs: Long,
++        aheadMs: Long,
++    ): Boolean {
++        val entry = entries[channelId] ?: return false
++        return entry.coveredFromMs <= nowMs && entry.coveredToMs >= nowMs + aheadMs
++    }
++
++    private fun indexAt(
++        slots: List<TvSlot>,
++        timeMs: Long,
++    ): Int {
++        var low = 0
++        var high = slots.size - 1
++        while (low <= high) {
++            val mid = (low + high) ushr 1
++            val slot = slots[mid]
++            when {
++                timeMs < slot.startMs -> high = mid - 1
++                timeMs >= slot.endMs -> low = mid + 1
++                else -> return mid
++            }
++        }
++        return -1
++    }
++}
+diff --git a/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClock.kt b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClock.kt
+new file mode 100644
+index 00000000..54fa73fe
+--- /dev/null
++++ b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClock.kt
+@@ -0,0 +1,60 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++/**
++ * The server's clock, as seen from the device.
++ *
++ * Every TV shows the same thing at the same moment only if they agree on the time, and device clocks drift. Each API
++ * response carries `serverTime`; the offset between it and a monotonic device clock is kept from the sample with the
++ * shortest round trip (the least uncertain), and [nowMs] is the monotonic clock plus that offset.
++ */
++class ServerClock(
++    private val elapsedMs: () -> Long = { System.nanoTime() / 1_000_000 },
++    private val wallMs: () -> Long = System::currentTimeMillis,
++) {
++    private data class Sample(
++        val offsetMs: Long,
++        val roundTripMs: Long,
++        val takenAtMs: Long,
++    )
++
++    @Volatile
++    private var best: Sample? = null
++
++    /** Whether at least one server time sample has been taken. */
++    val isSynced: Boolean get() = best != null
++
++    /**
++     * Records a server time.
++     *
++     * @param serverTimeMs the response's `serverTime`
++     * @param sentAtElapsedMs monotonic time the request was sent
++     * @param receivedAtElapsedMs monotonic time the response arrived
++     */
++    fun record(
++        serverTimeMs: Long,
++        sentAtElapsedMs: Long,
++        receivedAtElapsedMs: Long,
++    ) {
++        val roundTrip = (receivedAtElapsedMs - sentAtElapsedMs).coerceAtLeast(0)
++        val midpoint = sentAtElapsedMs + roundTrip / 2
++        val sample = Sample(serverTimeMs - midpoint, roundTrip, receivedAtElapsedMs)
++        val current = best
++        // Prefer tighter samples, but let an old one age out so a slowly drifting clock is followed.
++        if (current == null ||
++            sample.roundTripMs <= current.roundTripMs ||
++            receivedAtElapsedMs - current.takenAtMs > MAX_SAMPLE_AGE_MS
++        ) {
++            best = sample
++        }
++    }
++
++    /** The current server time in epoch milliseconds; the device clock until the first sample. */
++    fun nowMs(): Long = best?.let { elapsedMs() + it.offsetMs } ?: wallMs()
++
++    /** Monotonic device time, for timing requests. */
++    fun elapsed(): Long = elapsedMs()
++
++    private companion object {
++        const val MAX_SAMPLE_AGE_MS = 10 * 60 * 1000L
++    }
++}
+diff --git a/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlanner.kt b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlanner.kt
+new file mode 100644
+index 00000000..fd0f01ea
+--- /dev/null
++++ b/tvmode-core/src/main/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlanner.kt
+@@ -0,0 +1,115 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++/**
++ * One item for the player's queue: play [slot]'s item from [clipStartMs] to [clipEndMs] (positions in the item).
++ */
++data class PlayItem(
++    val slot: TvSlot,
++    val clipStartMs: Long,
++    val clipEndMs: Long,
++)
++
++/** What to do when tuning to a channel at a given moment. */
++sealed interface TunePlan {
++    /**
++     * Queue [items] and start the first at [startPositionMs] (relative to its clip start). More items follow once the
++     * player reaches the end of the queue; [queuedUntilMs] is when the last queued item ends on the schedule.
++     */
++    data class Play(
++        val items: List<PlayItem>,
++        val startPositionMs: Long,
++        val queuedUntilMs: Long,
++    ) : TunePlan
++
++    /** Nothing playable airs now (filler or off air): show static until [untilMs], then tune again. */
++    data class Static(
++        val slot: TvSlot,
++        val untilMs: Long,
++    ) : TunePlan
++
++    /** The schedule for now isn't loaded yet. */
++    data object NeedsSchedule : TunePlan
++}
++
++/**
++ * Turns cached slots into player instructions. Everything is computed from the schedule and the server clock, so a
++ * channel change needs no network call.
++ */
++object TuneInPlanner {
++    /** How many items to queue ahead of the one playing, so the player can preload them. */
++    const val QUEUE_AHEAD = 3
++
++    /** Joins closer than this to a slot's end skip to the next slot instead of flashing a few frames. */
++    const val MIN_JOIN_REMAINING_MS = 1_500L
++
++    /**
++     * @param upcoming the slot airing at [nowMs] followed by the next ones, as from [ScheduleCache.slotsFrom]
++     */
++    fun plan(
++        upcoming: List<TvSlot>,
++        nowMs: Long,
++        queueAhead: Int = QUEUE_AHEAD,
++    ): TunePlan {
++        var slots = upcoming.dropWhile { it.endMs <= nowMs }
++        val first = slots.firstOrNull() ?: return TunePlan.NeedsSchedule
++        if (first.startMs > nowMs) return TunePlan.NeedsSchedule
++
++        var joinAt = nowMs
++        if (first.endMs - nowMs < MIN_JOIN_REMAINING_MS && slots.size > 1) {
++            slots = slots.drop(1)
++            joinAt = slots.first().startMs
++        }
++
++        val current = slots.first()
++        if (!current.isPlayable) {
++            return TunePlan.Static(current, current.endMs)
++        }
++
++        val items = mutableListOf<PlayItem>()
++        for (slot in slots) {
++            if (!slot.isPlayable || items.size > queueAhead) break
++            if (items.isNotEmpty() && slot.startMs != items.last().slot.endMs) break
++            items += PlayItem(slot, slot.inPointMs, slot.outPointMs)
++        }
++
++        val offset = (joinAt - current.startMs).coerceAtLeast(0)
++        return TunePlan.Play(items, offset, items.last().slot.endMs)
++    }
++
++    /**
++     * The items to append after [lastQueued] so the queue stays [queueAhead] items ahead of [playing]. Stops at filler;
++     * the player shows static there and tunes again when it ends.
++     */
++    fun extend(
++        upcoming: List<TvSlot>,
++        playing: TvSlot,
++        lastQueued: TvSlot,
++        queueAhead: Int = QUEUE_AHEAD,
++    ): List<PlayItem> {
++        val afterPlaying = upcoming.dropWhile { it.id != playing.id }
++        val queuedAhead = afterPlaying.indexOfFirst { it.id == lastQueued.id }
++        if (queuedAhead < 0) return emptyList()
++        val wanted = queueAhead - queuedAhead
++        if (wanted <= 0) return emptyList()
++
++        val result = mutableListOf<PlayItem>()
++        var previous = lastQueued
++        for (slot in afterPlaying.drop(queuedAhead + 1)) {
++            if (result.size >= wanted || !slot.isPlayable || slot.startMs != previous.endMs) break
++            result += PlayItem(slot, slot.inPointMs, slot.outPointMs)
++            previous = slot
++        }
++        return result
++    }
++
++    /**
++     * How far the player is from where the schedule says it should be, in milliseconds (positive when behind).
++     *
++     * @param positionMs player position within the current item's clip
++     */
++    fun drift(
++        slot: TvSlot,
++        positionMs: Long,
++        nowMs: Long,
++    ): Long = (nowMs - slot.startMs) - positionMs
++}
+diff --git a/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClientTest.kt b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClientTest.kt
+new file mode 100644
+index 00000000..9b3cb7dc
+--- /dev/null
++++ b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/CableTvClientTest.kt
+@@ -0,0 +1,56 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import kotlinx.coroutines.test.runTest
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++class CableTvClientTest {
++    // Captured from a Jellyfin 12.0 server running the plugin; note the omitted null fields.
++    private val scheduleJson =
++        """
++        {"serverTime":"2026-09-26T10:24:15.1234567Z","from":"2026-09-26T10:22:00Z","to":"2026-09-26T10:30:00Z",
++         "scheduleVersion":"22436948cccb","channels":[{"channelId":"ch-ads","number":"0007","scheduleVersion":"d66b359113e8",
++         "slots":[
++          {"slotId":"s-1","kind":"program","start":"2026-09-26T10:22:00Z","end":"2026-09-26T10:23:20Z","itemId":"5b1c","mediaSourceId":"5b1c",
++           "inPointMs":0,"outPointMs":80023,"title":"Test Show","episode":"S01E02","guideGroup":"g-1"},
++          {"slotId":"s-1-1","kind":"filler","start":"2026-09-26T10:23:55Z","end":"2026-09-26T10:24:00Z","inPointMs":0,"outPointMs":5000,
++           "guideGroup":"g-1"},
++          {"slotId":"s-2","kind":"program","start":"2026-09-26T10:25:00Z","end":"2026-09-26T10:26:40Z","itemId":"428e","mediaSourceId":"428e",
++           "inPointMs":0,"outPointMs":100000,"title":"Short Film (1999)","guideGroup":"g-2","lineup":"Movie Hour","premiere":true,"futureField":1}
++         ]}]}
++        """.trimIndent()
++
++    @Test
++    fun parsesTheScheduleAndSyncsTheClock() =
++        runTest {
++            val requests = mutableListOf<Pair<String, Map<String, String>>>()
++            val client =
++                CableTvClient(
++                    { path, query ->
++                        requests += path to query
++                        scheduleJson
++                    },
++                )
++
++            val result = client.schedule(listOf("ch-ads"), T0, T0 + 10 * MIN)
++
++            assertEquals("CableTv/Schedule", requests.single().first)
++            assertEquals("ch-ads", requests.single().second["channelIds"])
++            val slots = result.single().slots
++            assertEquals(3, slots.size)
++            assertEquals(SlotKind.FILLER, slots[1].kind)
++            assertNull(slots[1].itemId)
++            assertEquals(false, slots[1].isPlayable)
++            assertEquals("Movie Hour", slots[2].lineup)
++            assertTrue(slots[2].premiere)
++            assertEquals(
++                java.time.Instant
++                    .parse("2026-09-26T10:22:00Z")
++                    .toEpochMilli(),
++                slots[0].startMs,
++            )
++            assertTrue(client.clock.isSynced)
++        }
++}
+diff --git a/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigatorTest.kt b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigatorTest.kt
+new file mode 100644
+index 00000000..661c4a0f
+--- /dev/null
++++ b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ChannelNavigatorTest.kt
+@@ -0,0 +1,60 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNull
++import org.junit.Test
++
++class ChannelNavigatorTest {
++    private val channels = listOf(channel("a", "0002"), channel("b", "0010"), channel("c", "0412"))
++
++    @Test
++    fun upAndDownWrapAround() {
++        val nav = ChannelNavigator(channels)
++
++        assertEquals("c", nav.down()?.id)
++        assertEquals("a", nav.up()?.id)
++        assertEquals("b", nav.up()?.id)
++    }
++
++    @Test
++    fun numberEntryCompletesAtFullLength_OrOnCommit() {
++        val nav = ChannelNavigator(channels)
++
++        listOf(0, 4, 1).forEach { assertNull(nav.typeDigit(it)) }
++        assertEquals("041", nav.pendingDigits)
++        assertEquals("c", nav.typeDigit(2)?.id)
++
++        nav.typeDigit(1)
++        nav.typeDigit(0)
++        assertEquals("b", nav.commitDigits()?.id)
++        assertNull(nav.commitDigits())
++    }
++
++    @Test
++    fun unknownNumbersDoNothing() {
++        val nav = ChannelNavigator(channels)
++
++        listOf(9, 9, 9, 9).forEach { nav.typeDigit(it) }
++
++        assertEquals("a", nav.current?.id)
++    }
++
++    @Test
++    fun lastSwitchesBack() {
++        val nav = ChannelNavigator(channels)
++        nav.tuneTo("c")
++
++        assertEquals("a", nav.last()?.id)
++        assertEquals("c", nav.last()?.id)
++    }
++
++    @Test
++    fun updateKeepsTheCurrentChannel() {
++        val nav = ChannelNavigator(channels)
++        nav.tuneTo("b")
++
++        nav.update(listOf(channel("b", "0010"), channel("d", "0020")))
++
++        assertEquals("b", nav.current?.id)
++    }
++}
+diff --git a/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/Fixtures.kt b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/Fixtures.kt
+new file mode 100644
+index 00000000..13f1e170
+--- /dev/null
++++ b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/Fixtures.kt
+@@ -0,0 +1,41 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++internal const val MIN = 60_000L
++internal const val T0 = 1_790_000_000_000L
++
++internal fun slot(
++    id: String,
++    startMin: Double,
++    endMin: Double,
++    kind: SlotKind = SlotKind.PROGRAM,
++    item: String? = if (kind == SlotKind.FILLER) null else "item-$id",
++    group: String = "g-$id",
++    inPointMs: Long = 0,
++) = TvSlot(
++    id = id,
++    kind = kind,
++    startMs = T0 + (startMin * MIN).toLong(),
++    endMs = T0 + (endMin * MIN).toLong(),
++    itemId = item,
++    mediaSourceId = item,
++    inPointMs = inPointMs,
++    outPointMs = inPointMs + ((endMin - startMin) * MIN).toLong(),
++    title =
++        if (kind == SlotKind.PROGRAM) {
++            "Show $id"
++        } else if (kind == SlotKind.COMMERCIAL) {
++            "Ad $id"
++        } else {
++            null
++        },
++    episode = null,
++    episodeTitle = null,
++    guideGroup = group,
++    premiere = false,
++    lineup = null,
++)
++
++internal fun channel(
++    id: String,
++    number: String,
++) = TvChannel(id, number, "Channel $number", null, "v1", 10)
+diff --git a/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/GuideTest.kt b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/GuideTest.kt
+new file mode 100644
+index 00000000..8b264f18
+--- /dev/null
++++ b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/GuideTest.kt
+@@ -0,0 +1,32 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++class GuideTest {
++    @Test
++    fun foldsBreaksIntoTheirProgramme() {
++        val entries =
++            Guide.entries(
++                listOf(
++                    slot("a", 0.0, 11.0, group = "g1"),
++                    slot("ad", 11.0, 12.0, SlotKind.COMMERCIAL, group = "g1"),
++                    slot("a2", 12.0, 23.0, group = "g1"),
++                    slot("f", 23.0, 30.0, SlotKind.FILLER, group = "g1"),
++                    slot("off", 30.0, 90.0, SlotKind.FILLER, group = "g2"),
++                ),
++            )
++
++        assertEquals(2, entries.size)
++        assertEquals("Show a", entries[0].title)
++        assertEquals(T0, entries[0].startMs)
++        assertEquals(T0 + 30 * MIN, entries[0].endMs)
++        assertTrue(entries[1].offAir)
++        assertEquals("Off air", entries[1].title)
++
++        val (now, next) = Guide.nowAndNext(entries, T0 + 15 * MIN)
++        assertEquals("g1", now?.guideGroup)
++        assertEquals("g2", next?.guideGroup)
++    }
++}
+diff --git a/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCacheTest.kt b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCacheTest.kt
+new file mode 100644
+index 00000000..87f971cd
+--- /dev/null
++++ b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ScheduleCacheTest.kt
+@@ -0,0 +1,54 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++class ScheduleCacheTest {
++    private fun schedule(
++        version: String,
++        vararg slots: TvSlot,
++    ) = ChannelSchedule("ch", version, slots.toList())
++
++    @Test
++    fun findsTheSlotAiringAtATime() {
++        val cache = ScheduleCache()
++        cache.merge(schedule("v1", slot("a", 0.0, 30.0), slot("b", 30.0, 60.0)), T0, T0 + 60 * MIN)
++
++        assertEquals("a", cache.slotAt("ch", T0 + 29 * MIN)?.id)
++        assertEquals("b", cache.slotAt("ch", T0 + 30 * MIN)?.id)
++        assertNull(cache.slotAt("ch", T0 + 60 * MIN))
++        assertEquals(listOf("a", "b"), cache.slotsFrom("ch", T0 + 5 * MIN).map { it.id })
++    }
++
++    @Test
++    fun mergesAdjacentWindows_AndExtendsCoverage() {
++        val cache = ScheduleCache()
++        cache.merge(schedule("v1", slot("a", 0.0, 30.0)), T0, T0 + 30 * MIN)
++        cache.merge(schedule("v1", slot("b", 30.0, 60.0)), T0 + 30 * MIN, T0 + 60 * MIN)
++
++        assertEquals(listOf("a", "b"), cache.slotsFrom("ch", T0).map { it.id })
++        assertTrue(cache.covers("ch", T0 + 10 * MIN, 40 * MIN))
++        assertFalse(cache.covers("ch", T0 + 10 * MIN, 60 * MIN))
++    }
++
++    @Test
++    fun aNewVersionReplacesTheChannel() {
++        val cache = ScheduleCache()
++        cache.merge(schedule("v1", slot("a", 0.0, 30.0), slot("b", 30.0, 60.0)), T0, T0 + 60 * MIN)
++        cache.merge(schedule("v2", slot("x", 0.0, 45.0)), T0, T0 + 45 * MIN)
++
++        assertEquals("v2", cache.version("ch"))
++        assertEquals(listOf("x"), cache.slotsFrom("ch", T0).map { it.id })
++    }
++
++    @Test
++    fun guideQueryReturnsOverlappingSlots() {
++        val cache = ScheduleCache()
++        cache.merge(schedule("v1", slot("a", 0.0, 30.0), slot("b", 30.0, 60.0), slot("c", 60.0, 90.0)), T0, T0 + 90 * MIN)
++
++        assertEquals(listOf("a", "b"), cache.slotsBetween("ch", T0 + 10 * MIN, T0 + 40 * MIN).map { it.id })
++    }
++}
+diff --git a/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClockTest.kt b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClockTest.kt
+new file mode 100644
+index 00000000..02de5d81
+--- /dev/null
++++ b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/ServerClockTest.kt
+@@ -0,0 +1,38 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++class ServerClockTest {
++    @Test
++    fun usesTheServerTimeAtTheRequestMidpoint() {
++        var elapsed = 1_000L
++        val clock = ServerClock(elapsedMs = { elapsed }, wallMs = { 0L })
++
++        assertFalse(clock.isSynced)
++        assertEquals(0L, clock.nowMs())
++
++        // Sent at 1000, answered at 1200: the server said T0, so at 1100 it was T0.
++        clock.record(serverTimeMs = T0, sentAtElapsedMs = 1_000, receivedAtElapsedMs = 1_200)
++        elapsed = 1_100
++        assertTrue(clock.isSynced)
++        assertEquals(T0, clock.nowMs())
++
++        elapsed = 61_100
++        assertEquals(T0 + 60_000, clock.nowMs())
++    }
++
++    @Test
++    fun prefersSamplesWithShorterRoundTrips() {
++        var elapsed = 0L
++        val clock = ServerClock(elapsedMs = { elapsed }, wallMs = { 0L })
++
++        clock.record(serverTimeMs = T0, sentAtElapsedMs = 0, receivedAtElapsedMs = 100)
++        clock.record(serverTimeMs = T0 + 5_000, sentAtElapsedMs = 1_000, receivedAtElapsedMs = 3_000)
++
++        elapsed = 50
++        assertEquals(T0, clock.nowMs())
++    }
++}
+diff --git a/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlannerTest.kt b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlannerTest.kt
+new file mode 100644
+index 00000000..b5c989ba
+--- /dev/null
++++ b/tvmode-core/src/test/kotlin/com/github/damontecres/wholphin/tvmode/core/TuneInPlannerTest.kt
+@@ -0,0 +1,87 @@
++package com.github.damontecres.wholphin.tvmode.core
++
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertTrue
++import org.junit.Test
++
++class TuneInPlannerTest {
++    private val day =
++        listOf(
++            slot("a", 0.0, 22.0, group = "g1"),
++            slot("ad1", 22.0, 22.5, SlotKind.COMMERCIAL, group = "g1"),
++            slot("ad2", 22.5, 23.0, SlotKind.COMMERCIAL, group = "g1"),
++            slot("f", 23.0, 30.0, SlotKind.FILLER, group = "g1"),
++            slot("b", 30.0, 52.0, group = "g2"),
++            slot("c", 52.0, 60.0, group = "g3"),
++        )
++
++    @Test
++    fun joinsTheAiringItemAtTheRightOffset_AndQueuesWhatFollows() {
++        val plan = TuneInPlanner.plan(day, T0 + 10 * MIN) as TunePlan.Play
++
++        assertEquals(listOf("a", "ad1", "ad2"), plan.items.map { it.slot.id })
++        assertEquals(10 * MIN, plan.startPositionMs)
++        assertEquals(T0 + 23 * MIN, plan.queuedUntilMs)
++    }
++
++    @Test
++    fun stopsQueueingAtFiller() {
++        val plan = TuneInPlanner.plan(day, T0 + 22 * MIN + 10_000) as TunePlan.Play
++
++        assertEquals(listOf("ad1", "ad2"), plan.items.map { it.slot.id })
++        assertEquals(10_000L, plan.startPositionMs)
++    }
++
++    @Test
++    fun fillerMeansStaticUntilItEnds() {
++        val plan = TuneInPlanner.plan(day, T0 + 25 * MIN)
++
++        assertEquals(TunePlan.Static(day[3], T0 + 30 * MIN), plan)
++    }
++
++    @Test
++    fun joiningInTheLastSecondSkipsToTheNextSlot() {
++        val plan = TuneInPlanner.plan(day, T0 + 52 * MIN - 500) as TunePlan.Play
++
++        assertEquals(
++            "c",
++            plan.items
++                .first()
++                .slot.id,
++        )
++        assertEquals(0L, plan.startPositionMs)
++    }
++
++    @Test
++    fun clipsFollowInAndOutPoints() {
++        val secondHalf = slot("a2", 0.0, 11.0, inPointMs = 11 * MIN)
++        val plan = TuneInPlanner.plan(listOf(secondHalf), T0 + 5 * MIN) as TunePlan.Play
++
++        assertEquals(11 * MIN, plan.items.single().clipStartMs)
++        assertEquals(22 * MIN, plan.items.single().clipEndMs)
++        assertEquals(5 * MIN, plan.startPositionMs)
++    }
++
++    @Test
++    fun withoutAScheduleForNowItAsksForOne() {
++        assertEquals(TunePlan.NeedsSchedule, TuneInPlanner.plan(emptyList(), T0))
++        assertEquals(TunePlan.NeedsSchedule, TuneInPlanner.plan(day, T0 + 61 * MIN))
++        assertEquals(TunePlan.NeedsSchedule, TuneInPlanner.plan(day.drop(1), T0 + 5 * MIN))
++    }
++
++    @Test
++    fun extendKeepsTheQueueAheadOfPlayback() {
++        val long = (0 until 10).map { slot("s$it", it * 10.0, it * 10.0 + 10) }
++
++        val more = TuneInPlanner.extend(long, playing = long[1], lastQueued = long[2], queueAhead = 3)
++
++        assertEquals(listOf("s3", "s4"), more.map { it.slot.id })
++        assertTrue(TuneInPlanner.extend(long, playing = long[1], lastQueued = long[4], queueAhead = 3).isEmpty())
++    }
++
++    @Test
++    fun driftIsPositiveWhenBehind() {
++        val playing = day[0]
++        assertEquals(2_000L, TuneInPlanner.drift(playing, positionMs = 8_000, nowMs = T0 + 10_000))
++    }
++}
+diff --git a/tvmode/README.md b/tvmode/README.md
+new file mode 100644
+index 00000000..bff75013
+--- /dev/null
++++ b/tvmode/README.md
+@@ -0,0 +1,44 @@
++# Cable TV mode
++
++A full-screen TV for channels scheduled by the [Cable TV Jellyfin plugin](https://github.com/arun-iv/jellyfin-cable-tv).
++Tuning is instant and needs no server transcoding: the app keeps the schedule, works out what airs now and how far
++into it, and direct-plays the original file from that point, with the next items queued so they preload.
++
++## Modules
++
++| Module | What it holds |
++|---|---|
++| `:tvmode-core` | Plain Kotlin, unit tested on the JVM: plugin API models and client, server clock, schedule cache, tune-in and queue planning, channel navigation, guide grouping |
++| `:tvmode` | Android: `CableTvScreen` (player, static overlay, channel banner, guide), `CableTvViewModel`, `TvModeHost`, `CableTvAvailability` |
++
++The app touches very little so rebasing on upstream stays easy:
++
++- `WholphinTvModeHost` implements `TvModeHost` (signed-in API client, player factory, navigation), bound in `TvModeModule`.
++- `Destination.CableTv` and its branch in `DestinationContent`.
++- A *Cable TV* nav drawer item, shown only when the server's plugin answers (`CableTvAvailability`).
++
++## Remote keys
++
++| Key | Action |
++|---|---|
++| Up / Down, Channel +/- | Change channel |
++| 0–9 | Tune by number (completes at full length or after 2 s) |
++| OK / Guide / Menu | Open or close the guide |
++| Left / Right / Info | Show the channel banner |
++| Last | Previous channel |
++| Back | Close the guide, or leave TV mode |
++
++## How playback follows the schedule
++
++- The clock is the server's (`serverTime` on every response, kept from the lowest-latency sample), never the device's.
++- A channel change plans from the cached schedule: the airing slot's item is queued with a clipping range (its in and
++  out points) and started at the offset; the next items are queued behind it. Filler and off-air stretches show static.
++- The queue is topped up on every item transition; playback that drifts more than 5 s from the schedule is re-tuned.
++- The schedule is fetched 6 hours ahead and refreshed when less than 2 remain; a changed `scheduleVersion` drops the
++  channel's cache.
++
++## Tests
++
++```sh
++./gradlew :tvmode-core:test
++```
+diff --git a/tvmode/build.gradle.kts b/tvmode/build.gradle.kts
+new file mode 100644
+index 00000000..ab94171d
+--- /dev/null
++++ b/tvmode/build.gradle.kts
+@@ -0,0 +1,52 @@
++// Cable TV mode: the TV screen (guide, direct play at the scheduled offset, static overlay) for channels scheduled by
++// the Cable TV Jellyfin plugin. The app wires it in through TvModeHost; everything else lives here so upstream
++// rebases touch as little of the app as possible.
++plugins {
++    alias(libs.plugins.android.library)
++    alias(libs.plugins.kotlin.compose)
++    alias(libs.plugins.ksp)
++    alias(libs.plugins.hilt)
++}
++
++private fun Provider<String>.getInt() = get().toInt()
++
++android {
++    namespace = "com.github.damontecres.wholphin.tvmode"
++    compileSdk {
++        version = release(libs.versions.compileSdk.getInt())
++    }
++
++    defaultConfig {
++        minSdk = libs.versions.minSdk.getInt()
++    }
++
++    buildFeatures {
++        compose = true
++    }
++
++    compileOptions {
++        sourceCompatibility = JavaVersion.VERSION_11
++        targetCompatibility = JavaVersion.VERSION_11
++    }
++}
++
++dependencies {
++    api(project(":tvmode-core"))
++
++    implementation(platform(libs.androidx.compose.bom))
++    implementation(libs.androidx.compose.ui)
++    implementation(libs.androidx.compose.ui.graphics)
++    implementation(libs.androidx.tv.foundation)
++    implementation(libs.androidx.tv.material)
++    implementation(libs.androidx.lifecycle.runtime.ktx)
++    implementation(libs.androidx.activity.compose)
++
++    implementation(libs.androidx.media3.exoplayer)
++    implementation(libs.androidx.media3.ui.compose)
++
++    implementation(libs.hilt.android)
++    implementation(libs.androidx.hilt.navigation.compose)
++    ksp(libs.hilt.android.compiler)
++
++    testImplementation(libs.junit)
++}
+diff --git a/tvmode/src/main/AndroidManifest.xml b/tvmode/src/main/AndroidManifest.xml
+new file mode 100644
+index 00000000..8072ee00
+--- /dev/null
++++ b/tvmode/src/main/AndroidManifest.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest />
+diff --git a/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvAvailability.kt b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvAvailability.kt
+new file mode 100644
+index 00000000..ef44959a
+--- /dev/null
++++ b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvAvailability.kt
+@@ -0,0 +1,23 @@
++package com.github.damontecres.wholphin.tvmode
++
++import com.github.damontecres.wholphin.tvmode.core.CableTvClient
++import javax.inject.Inject
++import javax.inject.Singleton
++
++/**
++ * Whether the current server runs the Cable TV plugin, so the app only offers TV mode where it works.
++ */
++@Singleton
++class CableTvAvailability
++    @Inject
++    constructor(
++        private val host: TvModeHost,
++    ) {
++        /** True when the plugin answers and has at least one channel. */
++        suspend fun isAvailable(): Boolean =
++            try {
++                CableTvClient(host.transport).channels().isNotEmpty()
++            } catch (e: Exception) {
++                false
++            }
++    }
+diff --git a/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvScreen.kt b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvScreen.kt
+new file mode 100644
+index 00000000..57a111ef
+--- /dev/null
++++ b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvScreen.kt
+@@ -0,0 +1,367 @@
++package com.github.damontecres.wholphin.tvmode
++
++import androidx.activity.compose.BackHandler
++import androidx.compose.foundation.Canvas
++import androidx.compose.foundation.background
++import androidx.compose.foundation.border
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.focusable
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.LazyRow
++import androidx.compose.foundation.lazy.items
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableLongStateOf
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.focus.FocusRequester
++import androidx.compose.ui.focus.focusRequester
++import androidx.compose.ui.focus.onFocusChanged
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.input.key.Key
++import androidx.compose.ui.input.key.KeyEvent
++import androidx.compose.ui.input.key.KeyEventType
++import androidx.compose.ui.input.key.key
++import androidx.compose.ui.input.key.onKeyEvent
++import androidx.compose.ui.input.key.type
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
++import androidx.media3.ui.compose.PlayerSurface
++import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
++import androidx.tv.material3.MaterialTheme
++import androidx.tv.material3.Text
++import com.github.damontecres.wholphin.tvmode.core.GuideEntry
++import kotlinx.coroutines.delay
++import java.time.Instant
++import java.time.ZoneId
++import java.time.format.DateTimeFormatter
++import java.time.format.FormatStyle
++import kotlin.random.Random
++
++/**
++ * Full-screen TV mode. Up/down or channel keys change channel, digits tune by number, OK opens the guide, Info shows
++ * the banner, Back closes the guide or leaves.
++ */
++@Composable
++fun CableTvScreen(
++    modifier: Modifier = Modifier,
++    viewModel: CableTvViewModel = hiltViewModel(),
++    onExit: () -> Unit = viewModel::exit,
++) {
++    val state by viewModel.state.collectAsState()
++    val player by viewModel.player.collectAsState()
++    val focusRequester = remember { FocusRequester() }
++
++    BackHandler {
++        if (!viewModel.closeGuide()) onExit()
++    }
++
++    Box(
++        modifier =
++            modifier
++                .fillMaxSize()
++                .background(Color.Black)
++                .focusRequester(focusRequester)
++                .onKeyEvent { handleKey(it, viewModel, state.showGuide) }
++                .focusable(),
++    ) {
++        player?.let {
++            PlayerSurface(
++                player = it,
++                surfaceType = SURFACE_TYPE_SURFACE_VIEW,
++                modifier = Modifier.fillMaxSize(),
++            )
++        }
++
++        if (state.showStatic || state.loading) {
++            StaticNoise(Modifier.fillMaxSize())
++        }
++
++        state.error?.let {
++            Text(
++                text = it,
++                color = Color.White,
++                modifier = Modifier.align(Alignment.Center).padding(32.dp),
++            )
++        }
++
++        if (state.showBanner && !state.showGuide) {
++            ChannelBanner(state, Modifier.align(Alignment.BottomStart).fillMaxWidth())
++        }
++
++        if (state.showGuide) {
++            GuideOverlay(state, onTune = viewModel::tuneTo, modifier = Modifier.fillMaxSize())
++        }
++    }
++
++    LaunchedEffect(state.showGuide) {
++        if (!state.showGuide) focusRequester.requestFocus()
++    }
++}
++
++private fun handleKey(
++    event: KeyEvent,
++    viewModel: CableTvViewModel,
++    guideOpen: Boolean,
++): Boolean {
++    if (event.type != KeyEventType.KeyDown) return false
++    // With the guide open, let focus move through its cells; only the guide keys are ours.
++    if (guideOpen) {
++        return when (event.key) {
++            Key.Guide, Key.Menu -> {
++                viewModel.toggleGuide()
++                true
++            }
++
++            else -> {
++                false
++            }
++        }
++    }
++    digitOf(event.key)?.let {
++        viewModel.digit(it)
++        return true
++    }
++    return when (event.key) {
++        Key.DirectionUp, Key.ChannelUp, Key.PageUp -> {
++            viewModel.channelUp()
++            true
++        }
++
++        Key.DirectionDown, Key.ChannelDown, Key.PageDown -> {
++            viewModel.channelDown()
++            true
++        }
++
++        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Guide, Key.Menu -> {
++            viewModel.toggleGuide()
++            true
++        }
++
++        Key.Info, Key.DirectionLeft, Key.DirectionRight -> {
++            viewModel.showInfo()
++            true
++        }
++
++        Key.LastChannel -> {
++            viewModel.lastChannel()
++            true
++        }
++
++        else -> {
++            false
++        }
++    }
++}
++
++private fun digitOf(key: Key): Int? =
++    when (key) {
++        Key.Zero, Key.NumPad0 -> 0
++        Key.One, Key.NumPad1 -> 1
++        Key.Two, Key.NumPad2 -> 2
++        Key.Three, Key.NumPad3 -> 3
++        Key.Four, Key.NumPad4 -> 4
++        Key.Five, Key.NumPad5 -> 5
++        Key.Six, Key.NumPad6 -> 6
++        Key.Seven, Key.NumPad7 -> 7
++        Key.Eight, Key.NumPad8 -> 8
++        Key.Nine, Key.NumPad9 -> 9
++        else -> null
++    }
++
++/** Analogue-TV static, shown while a file buffers and during filler. */
++@Composable
++fun StaticNoise(modifier: Modifier = Modifier) {
++    var frame by remember { mutableLongStateOf(0L) }
++    LaunchedEffect(Unit) {
++        while (true) {
++            delay(50)
++            frame++
++        }
++    }
++    Canvas(modifier) {
++        val random = Random(frame)
++        val cell = 6.dp.toPx()
++        val columns = (size.width / cell).toInt() + 1
++        val rows = (size.height / cell).toInt() + 1
++        drawRect(Color(0xFF101010))
++        for (row in 0 until rows) {
++            for (column in 0 until columns) {
++                val v = random.nextFloat()
++                if (v > 0.45f) {
++                    drawRect(
++                        color = Color(v, v, v),
++                        topLeft =
++                            androidx.compose.ui.geometry
++                                .Offset(column * cell, row * cell),
++                        size =
++                            androidx.compose.ui.geometry
++                                .Size(cell, cell),
++                    )
++                }
++            }
++        }
++    }
++}
++
++private val timeFormat: DateTimeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
++
++private fun time(ms: Long): String = timeFormat.format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
++
++@Composable
++private fun ChannelBanner(
++    state: CableTvUiState,
++    modifier: Modifier = Modifier,
++) {
++    Column(
++        modifier =
++            modifier
++                .background(Color(0xCC000000))
++                .padding(horizontal = 48.dp, vertical = 24.dp),
++    ) {
++        Row(verticalAlignment = Alignment.CenterVertically) {
++            Text(
++                text = state.digits.ifEmpty { state.channel?.number ?: "" },
++                color = Color.White,
++                fontSize = 40.sp,
++                fontWeight = FontWeight.Bold,
++            )
++            Spacer(Modifier.width(24.dp))
++            Text(text = state.channel?.name ?: "", color = Color.White, fontSize = 24.sp)
++        }
++        state.now?.let { now ->
++            Spacer(Modifier.height(8.dp))
++            Text(
++                text = listOfNotNull(now.title, now.episode, now.episodeTitle).joinToString(" · ") + if (now.premiere) "  NEW" else "",
++                color = Color.White,
++                fontSize = 20.sp,
++                maxLines = 1,
++                overflow = TextOverflow.Ellipsis,
++            )
++            val remaining = ((now.endMs - state.nowMs) / 60_000).coerceAtLeast(0)
++            Text(
++                text = "${time(now.startMs)} – ${time(now.endMs)} · $remaining min left",
++                color = Color(0xFFBBBBBB),
++                fontSize = 16.sp,
++            )
++        }
++        state.next?.let { next ->
++            Text(
++                text = "Next: ${time(next.startMs)} ${next.title}",
++                color = Color(0xFFBBBBBB),
++                fontSize = 16.sp,
++                maxLines = 1,
++                overflow = TextOverflow.Ellipsis,
++            )
++        }
++    }
++}
++
++private val DP_PER_MINUTE = 6.dp
++
++@Composable
++private fun GuideOverlay(
++    state: CableTvUiState,
++    onTune: (String) -> Unit,
++    modifier: Modifier = Modifier,
++) {
++    val firstCell = remember { FocusRequester() }
++    Column(
++        modifier =
++            modifier
++                .background(Color(0xE6000000))
++                .padding(32.dp),
++    ) {
++        Text(text = "Guide", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
++        Spacer(Modifier.height(12.dp))
++        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
++            items(state.guide, key = { it.channel.id }) { row ->
++                Row(verticalAlignment = Alignment.CenterVertically) {
++                    Column(Modifier.width(160.dp)) {
++                        Text(text = row.channel.number, color = Color.White, fontWeight = FontWeight.Bold)
++                        Text(text = row.channel.name, color = Color(0xFFBBBBBB), maxLines = 1, overflow = TextOverflow.Ellipsis)
++                    }
++                    LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
++                        items(row.entries, key = { it.guideGroup }) { entry ->
++                            val isCurrentRow = row.channel.id == state.channel?.id
++                            val airing = state.nowMs in entry.startMs until entry.endMs
++                            GuideCell(
++                                entry = entry,
++                                visibleFromMs = state.guideStartMs,
++                                airing = airing,
++                                onClick = { onTune(row.channel.id) },
++                                modifier = if (isCurrentRow && airing) Modifier.focusRequester(firstCell) else Modifier,
++                            )
++                        }
++                    }
++                }
++            }
++        }
++    }
++    LaunchedEffect(state.guide.isNotEmpty()) {
++        if (state.guide.isNotEmpty()) {
++            runCatching { firstCell.requestFocus() }
++        }
++    }
++}
++
++@Composable
++private fun GuideCell(
++    entry: GuideEntry,
++    visibleFromMs: Long,
++    airing: Boolean,
++    onClick: () -> Unit,
++    modifier: Modifier = Modifier,
++) {
++    var focused by remember { mutableStateOf(false) }
++    val minutes = ((entry.endMs - maxOf(entry.startMs, visibleFromMs)) / 60_000).coerceIn(5, 240)
++    val background =
++        when {
++            focused -> MaterialTheme.colorScheme.primary
++            airing -> Color(0xFF2E3440)
++            else -> Color(0xFF1E2128)
++        }
++    Column(
++        modifier =
++            modifier
++                .width(DP_PER_MINUTE * minutes.toInt())
++                .height(56.dp)
++                .background(background, RoundedCornerShape(4.dp))
++                .border(1.dp, if (focused) Color.White else Color.Transparent, RoundedCornerShape(4.dp))
++                .onFocusChanged { focused = it.isFocused }
++                .clickable(onClick = onClick)
++                .padding(horizontal = 8.dp, vertical = 4.dp),
++    ) {
++        Text(
++            text = entry.title + if (entry.premiere) "  NEW" else "",
++            color = Color.White,
++            maxLines = 1,
++            overflow = TextOverflow.Ellipsis,
++        )
++        Text(
++            text = time(entry.startMs) + (entry.lineup?.let { " · $it" } ?: ""),
++            color = Color(0xFFBBBBBB),
++            fontSize = 12.sp,
++            maxLines = 1,
++        )
++    }
++}
+diff --git a/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvViewModel.kt b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvViewModel.kt
+new file mode 100644
+index 00000000..e70ad3d1
+--- /dev/null
++++ b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/CableTvViewModel.kt
+@@ -0,0 +1,375 @@
++package com.github.damontecres.wholphin.tvmode
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import androidx.media3.common.MediaItem
++import androidx.media3.common.PlaybackException
++import androidx.media3.common.Player
++import com.github.damontecres.wholphin.tvmode.core.CableTvClient
++import com.github.damontecres.wholphin.tvmode.core.ChannelNavigator
++import com.github.damontecres.wholphin.tvmode.core.Guide
++import com.github.damontecres.wholphin.tvmode.core.GuideEntry
++import com.github.damontecres.wholphin.tvmode.core.PlayItem
++import com.github.damontecres.wholphin.tvmode.core.ScheduleCache
++import com.github.damontecres.wholphin.tvmode.core.TuneInPlanner
++import com.github.damontecres.wholphin.tvmode.core.TunePlan
++import com.github.damontecres.wholphin.tvmode.core.TvChannel
++import com.github.damontecres.wholphin.tvmode.core.TvSlot
++import dagger.hilt.android.lifecycle.HiltViewModel
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.update
++import kotlinx.coroutines.isActive
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
++import javax.inject.Inject
++import kotlin.math.abs
++
++/** One guide row. */
++data class GuideRow(
++    val channel: TvChannel,
++    val entries: List<GuideEntry>,
++)
++
++data class CableTvUiState(
++    val loading: Boolean = true,
++    val error: String? = null,
++    val channel: TvChannel? = null,
++    val now: GuideEntry? = null,
++    val next: GuideEntry? = null,
++    val showBanner: Boolean = false,
++    val showStatic: Boolean = true,
++    val digits: String = "",
++    val showGuide: Boolean = false,
++    val guide: List<GuideRow> = emptyList(),
++    val guideStartMs: Long = 0,
++    val nowMs: Long = 0,
++)
++
++/**
++ * Runs the TV: tunes channels from the cached schedule (no network call on a channel change), keeps the player's
++ * queue a few items ahead so the next show or break is preloaded, and shows static while a new file buffers or when
++ * the schedule says filler.
++ */
++@HiltViewModel
++class CableTvViewModel
++    @Inject
++    constructor(
++        private val host: TvModeHost,
++    ) : ViewModel() {
++        private val client = CableTvClient(host.transport)
++        private val cache = ScheduleCache()
++        private val navigator = ChannelNavigator(emptyList())
++
++        private val _state = MutableStateFlow(CableTvUiState())
++        val state: StateFlow<CableTvUiState> = _state.asStateFlow()
++
++        private val _player = MutableStateFlow<Player?>(null)
++        val player: StateFlow<Player?> = _player.asStateFlow()
++
++        private var queued: List<PlayItem> = emptyList()
++        private var staticUntilMs: Long? = null
++        private var bannerHideAtMs = 0L
++        private var digitsCommitAtMs: Long? = null
++        private var lastDriftCheckMs = 0L
++        private var lastChannelRefreshMs = 0L
++        private var tuneJob: Job? = null
++
++        private val listener =
++            object : Player.Listener {
++                override fun onMediaItemTransition(
++                    mediaItem: MediaItem?,
++                    reason: Int,
++                ) {
++                    val slot = mediaItem?.slot() ?: return
++                    showNowAndNext(slot)
++                    extendQueue(slot)
++                }
++
++                override fun onRenderedFirstFrame() {
++                    _state.update { it.copy(showStatic = false) }
++                }
++
++                override fun onPlaybackStateChanged(playbackState: Int) {
++                    when (playbackState) {
++                        // The queue ran out: filler follows, or the schedule moved on. Work out what airs now.
++                        Player.STATE_ENDED -> retune()
++
++                        Player.STATE_BUFFERING -> _state.update { it.copy(showStatic = true) }
++
++                        Player.STATE_READY -> _state.update { it.copy(showStatic = false) }
++                    }
++                }
++
++                override fun onPlayerError(error: PlaybackException) {
++                    // A file that won't play: cover it with static and try again when the next slot starts.
++                    val current = queued.firstOrNull { it.slot.covers(client.clock.nowMs()) }?.slot
++                    staticUntilMs = current?.endMs ?: (client.clock.nowMs() + 10_000)
++                    _state.update { it.copy(showStatic = true) }
++                }
++            }
++
++        init {
++            viewModelScope.launch { start() }
++            viewModelScope.launch { tick() }
++        }
++
++        private suspend fun start() {
++            try {
++                val channels = withContext(Dispatchers.IO) { client.channels() }
++                lastChannelRefreshMs = client.clock.nowMs()
++                if (channels.isEmpty()) {
++                    _state.update { it.copy(loading = false, error = "The server has no Cable TV channels yet.") }
++                    return
++                }
++                navigator.update(channels)
++                val player = host.createPlayer()
++                player.addListener(listener)
++                player.playWhenReady = true
++                _player.value = player
++                _state.update { it.copy(loading = false) }
++                navigator.current?.let { tune(it) }
++                refreshGuide()
++            } catch (e: Exception) {
++                _state.update { it.copy(loading = false, error = "Couldn't reach the Cable TV plugin: ${e.message}") }
++            }
++        }
++
++        fun channelUp() = navigator.up()?.let(::tune)
++
++        fun channelDown() = navigator.down()?.let(::tune)
++
++        fun lastChannel() = navigator.last()?.let(::tune)
++
++        fun tuneTo(channelId: String) {
++            _state.update { it.copy(showGuide = false) }
++            navigator.tuneTo(channelId)?.let(::tune)
++        }
++
++        fun digit(value: Int) {
++            val channel = navigator.typeDigit(value)
++            if (channel != null) {
++                digitsCommitAtMs = null
++                tune(channel)
++            } else {
++                digitsCommitAtMs = client.clock.nowMs() + DIGIT_TIMEOUT_MS
++                _state.update { it.copy(digits = navigator.pendingDigits, showBanner = true) }
++                bannerHideAtMs = client.clock.nowMs() + BANNER_MS
++            }
++        }
++
++        fun exit() = host.exit()
++
++        fun showInfo() {
++            bannerHideAtMs = client.clock.nowMs() + BANNER_MS
++            _state.update { it.copy(showBanner = true) }
++        }
++
++        fun toggleGuide() {
++            val show = !_state.value.showGuide
++            _state.update { it.copy(showGuide = show) }
++            if (show) viewModelScope.launch { refreshGuide() }
++        }
++
++        fun closeGuide(): Boolean {
++            if (!_state.value.showGuide) return false
++            _state.update { it.copy(showGuide = false) }
++            return true
++        }
++
++        private fun tune(channel: TvChannel) {
++            tuneJob?.cancel()
++            staticUntilMs = null
++            bannerHideAtMs = client.clock.nowMs() + BANNER_MS
++            _state.update { it.copy(channel = channel, digits = "", showBanner = true, showStatic = true) }
++            tuneJob =
++                viewModelScope.launch {
++                    val player = _player.value ?: return@launch
++                    val now = client.clock.nowMs()
++                    if (!cache.covers(channel.id, now, MIN_AHEAD_MS)) {
++                        fetch(listOf(channel.id), now)
++                    }
++                    when (val plan = TuneInPlanner.plan(cache.slotsFrom(channel.id, client.clock.nowMs()), client.clock.nowMs())) {
++                        is TunePlan.Play -> {
++                            queued = plan.items
++                            player.setMediaItems(plan.items.map(::toMediaItem), 0, plan.startPositionMs)
++                            player.prepare()
++                            player.play()
++                            showNowAndNext(plan.items.first().slot)
++                        }
++
++                        is TunePlan.Static -> {
++                            queued = emptyList()
++                            player.stop()
++                            player.clearMediaItems()
++                            staticUntilMs = plan.untilMs
++                            showNowAndNext(plan.slot)
++                            _state.update { it.copy(showStatic = true) }
++                        }
++
++                        TunePlan.NeedsSchedule -> {
++                            staticUntilMs = client.clock.nowMs() + 5_000
++                            _state.update { it.copy(showStatic = true) }
++                        }
++                    }
++                }
++        }
++
++        private fun retune() {
++            navigator.current?.let(::tune)
++        }
++
++        private fun extendQueue(playing: TvSlot) {
++            val channel = navigator.current ?: return
++            val player = _player.value ?: return
++            val last = queued.lastOrNull()?.slot ?: return
++            val more = TuneInPlanner.extend(cache.slotsFrom(channel.id, playing.startMs), playing, last)
++            if (more.isNotEmpty()) {
++                queued = queued.dropWhile { it.slot.endMs <= playing.startMs } + more
++                player.addMediaItems(more.map(::toMediaItem))
++            }
++        }
++
++        private fun toMediaItem(item: PlayItem): MediaItem =
++            MediaItem
++                .Builder()
++                .setUri(host.streamUrl(item.slot.itemId!!, item.slot.mediaSourceId))
++                .setMediaId(item.slot.id)
++                .setClippingConfiguration(
++                    MediaItem.ClippingConfiguration
++                        .Builder()
++                        .setStartPositionMs(item.clipStartMs)
++                        .setEndPositionMs(item.clipEndMs)
++                        .build(),
++                ).setTag(item.slot)
++                .build()
++
++        private fun MediaItem.slot(): TvSlot? = localConfiguration?.tag as? TvSlot
++
++        private fun showNowAndNext(slot: TvSlot) {
++            val channel = navigator.current ?: return
++            val entries = Guide.entries(cache.slotsBetween(channel.id, slot.startMs - GUIDE_BACK_MS, slot.endMs + GUIDE_AHEAD_MS))
++            val (now, next) = Guide.nowAndNext(entries, client.clock.nowMs())
++            _state.update { it.copy(now = now, next = next) }
++        }
++
++        private suspend fun fetch(
++            channelIds: List<String>,
++            nowMs: Long,
++        ) {
++            val from = nowMs - FETCH_BACK_MS
++            val to = nowMs + FETCH_AHEAD_MS
++            try {
++                val schedules = withContext(Dispatchers.IO) { client.schedule(channelIds, from, to) }
++                schedules.forEach { cache.merge(it, from, to) }
++            } catch (e: Exception) {
++                // Keep playing from what's cached; the next tick tries again.
++            }
++        }
++
++        private suspend fun refreshGuide() {
++            val channels = navigator.channels
++            if (channels.isEmpty()) return
++            val now = client.clock.nowMs()
++            val missing = channels.filter { !cache.covers(it.id, now, GUIDE_AHEAD_MS) }.map { it.id }
++            if (missing.isNotEmpty()) fetch(missing, now)
++            val start = now - (now % HALF_HOUR_MS)
++            val rows = channels.map { GuideRow(it, Guide.entries(cache.slotsBetween(it.id, start, start + GUIDE_AHEAD_MS))) }
++            _state.update { it.copy(guide = rows, guideStartMs = start) }
++        }
++
++        private suspend fun refreshChannels() {
++            try {
++                val channels = withContext(Dispatchers.IO) { client.channels() }
++                channels.forEach { channel ->
++                    // A new version means the plugin rebuilt the channel: drop what's cached and re-tune if watching it.
++                    if (cache.version(channel.id) != null && cache.version(channel.id) != channel.scheduleVersion) {
++                        cache.invalidate(channel.id)
++                        if (navigator.current?.id == channel.id) retune()
++                    }
++                }
++                navigator.update(channels)
++            } catch (e: Exception) {
++                // Try again next time.
++            }
++        }
++
++        private suspend fun tick() {
++            while (viewModelScope.isActive) {
++                delay(TICK_MS)
++                val now = client.clock.nowMs()
++                _state.update { it.copy(nowMs = now) }
++
++                digitsCommitAtMs?.let { at ->
++                    if (now >= at) {
++                        digitsCommitAtMs = null
++                        val channel = navigator.commitDigits()
++                        if (channel != null) tune(channel) else _state.update { it.copy(digits = "") }
++                    }
++                }
++
++                if (_state.value.showBanner && now >= bannerHideAtMs && _state.value.digits.isEmpty()) {
++                    _state.update { it.copy(showBanner = false) }
++                }
++
++                staticUntilMs?.let { until ->
++                    if (now >= until) {
++                        staticUntilMs = null
++                        retune()
++                    }
++                }
++
++                val channel = navigator.current ?: continue
++                if (!cache.covers(channel.id, now, REFRESH_WHEN_LESS_THAN_MS)) {
++                    fetch(listOf(channel.id), now)
++                }
++
++                if (now - lastDriftCheckMs >= DRIFT_CHECK_MS) {
++                    lastDriftCheckMs = now
++                    checkDrift(now)
++                }
++
++                if (now - lastChannelRefreshMs >= CHANNEL_REFRESH_MS) {
++                    lastChannelRefreshMs = now
++                    refreshChannels()
++                }
++            }
++        }
++
++        /** Re-tunes when playback has wandered from the schedule, for example after a long stall. */
++        private fun checkDrift(now: Long) {
++            val player = _player.value ?: return
++            if (player.playbackState != Player.STATE_READY || !player.isPlaying) return
++            val slot = player.currentMediaItem?.slot() ?: return
++            if (abs(TuneInPlanner.drift(slot, player.currentPosition, now)) > MAX_DRIFT_MS) retune()
++        }
++
++        override fun onCleared() {
++            _player.value?.let {
++                it.removeListener(listener)
++                host.releasePlayer(it)
++            }
++            _player.value = null
++            super.onCleared()
++        }
++
++        private companion object {
++            const val TICK_MS = 500L
++            const val BANNER_MS = 4_000L
++            const val DIGIT_TIMEOUT_MS = 2_000L
++            const val DRIFT_CHECK_MS = 10_000L
++            const val MAX_DRIFT_MS = 5_000L
++            const val CHANNEL_REFRESH_MS = 10 * 60_000L
++            const val MIN_AHEAD_MS = 30 * 60_000L
++            const val REFRESH_WHEN_LESS_THAN_MS = 2 * 60 * 60_000L
++            const val FETCH_BACK_MS = 60 * 60_000L
++            const val FETCH_AHEAD_MS = 6 * 60 * 60_000L
++            const val GUIDE_BACK_MS = 60 * 60_000L
++            const val GUIDE_AHEAD_MS = 3 * 60 * 60_000L
++            const val HALF_HOUR_MS = 30 * 60_000L
++        }
++    }
+diff --git a/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/TvModeHost.kt b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/TvModeHost.kt
+new file mode 100644
+index 00000000..2abf209f
+--- /dev/null
++++ b/tvmode/src/main/java/com/github/damontecres/wholphin/tvmode/TvModeHost.kt
+@@ -0,0 +1,28 @@
++package com.github.damontecres.wholphin.tvmode
++
++import androidx.media3.common.Player
++import com.github.damontecres.wholphin.tvmode.core.CableTvTransport
++
++/**
++ * What the TV mode needs from the app. Wholphin implements it with its signed-in API client and player factory; this
++ * interface is the only coupling between the two.
++ */
++interface TvModeHost {
++    /** Authenticated GET requests to the current server. */
++    val transport: CableTvTransport
++
++    /** A direct-play (static) stream URL for an item's media source. */
++    fun streamUrl(
++        itemId: String,
++        mediaSourceId: String?,
++    ): String
++
++    /** Creates the video player, configured with the user's playback settings. */
++    suspend fun createPlayer(): Player
++
++    /** Releases a player created by [createPlayer]. */
++    fun releasePlayer(player: Player)
++
++    /** Leaves TV mode (back to the previous page). */
++    fun exit()
++}
+-- 
+2.43.0
+
