@@ -9,12 +9,12 @@
     "imageUrl": "",
     "versions": [
       {
-        "version": "0.2.0.0",
-        "changelog": "Continuous Live TV stream that joins mid-show and runs through programmes (copy video, AAC audio, loudness levelling, one ffmpeg per watched channel). Commercial breaks with fill-to-grid and halfway or chapter mid-breaks. Round robin, block and marathon sorting, source weights, and a schedule preview on the settings page.",
+        "version": "0.3.0.0",
+        "changelog": "Time slots, restricted hours, seasonal lineups and premieres, with programmes fitted so slots start on time. A form-based settings editor with library pickers. Guide refresh after server start.",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/arun-iv/jellyfin-cable-tv/main/dist/cabletv_0.2.0.0.zip",
-        "checksum": "32c6520834c5ac181454bddabc558b08",
-        "timestamp": "2026-09-26T09:51:32Z"
+        "sourceUrl": "https://raw.githubusercontent.com/arun-iv/jellyfin-cable-tv/main/dist/cabletv_0.3.0.0.zip",
+        "checksum": "db341892136a00ef54261f097abefaf8",
+        "timestamp": "2026-09-26T10:28:44Z"
       }
     ]
   }

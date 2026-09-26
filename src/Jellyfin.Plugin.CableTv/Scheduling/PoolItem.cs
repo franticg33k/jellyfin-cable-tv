@@ -65,6 +65,9 @@ public sealed record PoolItem(Guid ItemId, string MediaSourceId, long DurationTi
     /// <summary>Gets a value indicating whether the item has an audio stream.</summary>
     public bool HasAudio { get; init; } = true;
 
+    /// <summary>Gets when the item was added to the library, used for premieres.</summary>
+    public DateTime? DateCreated { get; init; }
+
     /// <summary>Gets the "S02E05" style episode label, or null.</summary>
     public string? EpisodeLabel => SeasonNumber is int s && EpisodeNumber is int e
         ? FormattableString.Invariant($"S{s:00}E{e:00}")
