@@ -29,4 +29,10 @@ public class ContentSource
     /// Gets or sets how many times each item from this source airs per cycle (1–10). Only <see cref="ChannelSorting.Random"/> honours it.
     /// </summary>
     public int Weight { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets restricted hours, "HH:mm-HH:mm" in local time (for example "21:00-05:00"): this source's items air only
+    /// then. Empty for any time. An item also in an unrestricted source is not restricted.
+    /// </summary>
+    public string? AirHours { get; set; }
 }

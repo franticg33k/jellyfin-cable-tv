@@ -90,4 +90,33 @@ public class ChannelDefinition
     /// </summary>
     [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
     public ContentSource[] CommercialSources { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets time slots, where the channel airs different content; earlier slots win where they overlap.
+    /// </summary>
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
+    public TimeSlotDefinition[] TimeSlots { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets seasonal lineups; earlier ones win where they overlap.
+    /// </summary>
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
+    public SeasonDefinition[] Seasons { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the premiere settings.
+    /// </summary>
+    public PremiereDefinition Premieres { get; set; } = new();
+
+    /// <summary>
+    /// Returns a copy of this channel with other content sources, for resolving a slot's or season's pool.
+    /// </summary>
+    /// <param name="sources">The sources.</param>
+    /// <returns>The copy.</returns>
+    public ChannelDefinition WithSources(ContentSource[] sources)
+    {
+        var copy = (ChannelDefinition)MemberwiseClone();
+        copy.Sources = sources;
+        return copy;
+    }
 }
