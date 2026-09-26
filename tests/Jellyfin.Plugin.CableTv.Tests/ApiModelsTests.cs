@@ -33,4 +33,36 @@ public class ApiModelsTests
         Assert.Equal("g-77", root.GetProperty("guideGroup").GetString());
         Assert.Equal(start, root.GetProperty("start").GetDateTime().ToUniversalTime());
     }
+
+    [Fact]
+    public void Slot_OmitsMediaSourceWhenItIsTheItem()
+    {
+        var id = Guid.NewGuid();
+        var start = new DateTime(2026, 9, 26, 20, 0, 0, DateTimeKind.Utc);
+        ScheduledSlot Slot(string source) => new("s", SlotKind.Program, start, start.AddMinutes(1), new PoolItem(id, source, 600_000_000, "x"), 0, 600_000_000, "g");
+
+        Assert.Null(SlotDto.From(Slot(id.ToString("N"))).MediaSourceId);
+        Assert.Equal("other-version", SlotDto.From(Slot("other-version")).MediaSourceId);
+    }
+
+    [Fact]
+    public void GuideProgram_FoldsBreaksIntoOneEntry()
+    {
+        var item = new PoolItem(Guid.NewGuid(), "m", TimeSpan.FromMinutes(90).Ticks, "Starship Harbor") { IsMovie = true, ProductionYear = 1994, OfficialRating = "PG-13" };
+        var start = new DateTime(2026, 9, 26, 20, 0, 0, DateTimeKind.Utc);
+        var slots = new[]
+        {
+            new ScheduledSlot("s-1", SlotKind.Program, start, start.AddMinutes(90), item, 0, item.DurationTicks, "g-1"),
+            new ScheduledSlot("s-1-1", SlotKind.Filler, start.AddMinutes(90), start.AddMinutes(120), null, 0, 0, "g-1"),
+        };
+        var dto = GuideProgramDto.From(new ScheduledBlock("1", item, start, start.AddMinutes(120), slots));
+
+        Assert.Equal("g-1", dto.GuideGroup);
+        Assert.Equal(start.AddMinutes(120), dto.End);
+        Assert.Equal("Starship Harbor", dto.Title);
+        Assert.True(dto.Movie);
+        Assert.Equal(1994, dto.Year);
+        Assert.Equal("PG-13", dto.Rating);
+        Assert.Null(dto.Episode);
+    }
 }
