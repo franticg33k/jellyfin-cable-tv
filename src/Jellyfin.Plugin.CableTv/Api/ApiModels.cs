@@ -114,6 +114,9 @@ public sealed record ChannelBrandingDto(
 /// <param name="GuideGroup">Groups a programme with its breaks.</param>
 /// <param name="Premiere">True for a premiere of a newly added item; omitted otherwise.</param>
 /// <param name="Lineup">Name of the time slot or seasonal lineup; omitted for the main lineup.</param>
+/// <param name="Year">Production year, when known.</param>
+/// <param name="Rating">Official rating, for example "TV-PG", when known.</param>
+/// <param name="Movie">True for a movie; omitted otherwise.</param>
 public sealed record SlotDto(
     [property: JsonPropertyName("slotId")] string SlotId,
     [property: JsonPropertyName("kind")] string Kind,
@@ -128,7 +131,10 @@ public sealed record SlotDto(
     [property: JsonPropertyName("episodeTitle")] string? EpisodeTitle,
     [property: JsonPropertyName("guideGroup")] string GuideGroup,
     [property: JsonPropertyName("premiere")] bool? Premiere = null,
-    [property: JsonPropertyName("lineup")] string? Lineup = null)
+    [property: JsonPropertyName("lineup")] string? Lineup = null,
+    [property: JsonPropertyName("year")] int? Year = null,
+    [property: JsonPropertyName("rating")] string? Rating = null,
+    [property: JsonPropertyName("movie")] bool? Movie = null)
 {
     /// <summary>Maps an engine slot to the wire format.</summary>
     /// <param name="slot">Engine slot.</param>
@@ -150,6 +156,9 @@ public sealed record SlotDto(
             slot.Item?.EpisodeTitle,
             slot.GuideGroup,
             slot.IsPremiere ? true : null,
-            slot.Lineup);
+            slot.Lineup,
+            slot.Item?.ProductionYear,
+            string.IsNullOrWhiteSpace(slot.Item?.OfficialRating) ? null : slot.Item.OfficialRating,
+            slot.Item?.IsMovie == true ? true : null);
     }
 }

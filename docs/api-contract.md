@@ -77,6 +77,8 @@ server's naming policy. Times are UTC ISO 8601.
   stretch where the channel is off air).
 - `premiere: true` marks an airing of a newly added item; `lineup` names the time slot or seasonal lineup a
   slot belongs to. Both are omitted otherwise.
+- `year`, `rating` (official rating, e.g. `TV-PG`) and `movie: true` describe the item, for guide colours and
+  badges. Anything else (overview, images, media details) comes from Jellyfin's item API when a client needs it.
 - Fields that are null are omitted from the JSON (Jellyfin's serializer), for example `itemId` and `title`
   on filler and `episode` on movies.
 - `guideGroup` ties breaks to their programme, so a guide shows one block and the player sees every item.

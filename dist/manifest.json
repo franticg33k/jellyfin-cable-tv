@@ -9,12 +9,12 @@
     "imageUrl": "",
     "versions": [
       {
-        "version": "0.4.0.0",
-        "changelog": "0.4.0.0: channel suggestions from your library (networks, genres, decades, kids, holidays, collections), quick channels, lineup CSV and channel pack import/export, seasonal and pinned-episode imports, title, network, tag, rating, year and keyword sources with exclusions, channel logos (network logos, logo packs, generated), guide categories, and faster rebuilds for large libraries.",
+        "version": "0.4.1.0",
+        "changelog": "0.4.1.0: schedule slots carry year, rating and a movie flag for guide colours and badges. 0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/cabletv_0.4.0.0.zip",
-        "checksum": "8156ae02acf3843d1d547add360e4012",
-        "timestamp": "2026-09-26T12:54:40Z"
+        "sourceUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/cabletv_0.4.1.0.zip",
+        "checksum": "20d986e8b339606da7bf65311a7c22c0",
+        "timestamp": "2026-09-26T13:44:11Z"
       }
     ]
   }
