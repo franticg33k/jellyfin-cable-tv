@@ -99,7 +99,7 @@ The JSON form of a channel, for reference:
 |---|---|---|
 | 0. Foundations | Plugin scaffold for Jellyfin 12.x, local test server | Done |
 | 1. Plugin MVP | Channels, pools, random/cyclic schedule, `Schedule`/`Now` API, Live TV registration | Done |
-| 2. Fork MVP | Guide, direct play at offset, preloading, static overlay | In progress in the Wholphin fork |
+| 2. Fork MVP | Guide, direct play at offset, preloading, static overlay | In progress: patches in [`clients/wholphin`](clients/wholphin/) (core tested; Android UI not compiled yet) |
 | 3. Fallback stream | Continuous copy-video / AAC-audio stream, shared per channel, timestamps that never rewind | Done |
 | 4. Commercials | Break planning, halfway and chapter mid-breaks, fill-to-grid, one guide entry per programme | Done (pre-converting the ad library is not done; Auto mode transcodes mismatched ads on the fly) |
 | 5. Scheduling depth | Sorting modes, weights, time slots, restricted hours, seasonal lineups, premieres, settings form, preview | Done |
