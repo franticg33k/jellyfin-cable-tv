@@ -99,6 +99,76 @@ public sealed record ChannelBrandingDto(
     [property: JsonPropertyName("channelId")] string ChannelId,
     [property: JsonPropertyName("logoUrl")] string? LogoUrl);
 
+/// <summary>Response of <c>GET /CableTv/Guide</c>.</summary>
+/// <param name="ServerTime">Server clock when the response was built.</param>
+/// <param name="From">Window start actually served.</param>
+/// <param name="To">Window end actually served.</param>
+/// <param name="Channels">Per-channel programmes.</param>
+public sealed record GuideResponse(
+    [property: JsonPropertyName("serverTime")] DateTime ServerTime,
+    [property: JsonPropertyName("from")] DateTime From,
+    [property: JsonPropertyName("to")] DateTime To,
+    [property: JsonPropertyName("channels")] IReadOnlyList<ChannelGuideDto> Channels);
+
+/// <summary>One channel's programmes in a guide window.</summary>
+/// <param name="ChannelId">Channel id.</param>
+/// <param name="ScheduleVersion">Channel timeline version.</param>
+/// <param name="Programs">Programmes overlapping the window, breaks folded in.</param>
+public sealed record ChannelGuideDto(
+    [property: JsonPropertyName("channelId")] string ChannelId,
+    [property: JsonPropertyName("scheduleVersion")] string ScheduleVersion,
+    [property: JsonPropertyName("programs")] IReadOnlyList<GuideProgramDto> Programs);
+
+/// <summary>A guide entry: one programme with its breaks, or an off-air stretch.</summary>
+/// <param name="GuideGroup">Same value as the programme's slots carry.</param>
+/// <param name="Start">Start (UTC).</param>
+/// <param name="End">End (UTC), breaks included.</param>
+/// <param name="ItemId">Programme item; omitted when off air.</param>
+/// <param name="Title">Title; omitted when off air.</param>
+/// <param name="Episode">"S02E05", for episodes.</param>
+/// <param name="EpisodeTitle">Episode title.</param>
+/// <param name="Premiere">True for a premiere.</param>
+/// <param name="Lineup">Time slot or seasonal lineup name.</param>
+/// <param name="Year">Production year.</param>
+/// <param name="Rating">Official rating.</param>
+/// <param name="Movie">True for a movie.</param>
+public sealed record GuideProgramDto(
+    [property: JsonPropertyName("guideGroup")] string GuideGroup,
+    [property: JsonPropertyName("start")] DateTime Start,
+    [property: JsonPropertyName("end")] DateTime End,
+    [property: JsonPropertyName("itemId")] string? ItemId,
+    [property: JsonPropertyName("title")] string? Title,
+    [property: JsonPropertyName("episode")] string? Episode,
+    [property: JsonPropertyName("episodeTitle")] string? EpisodeTitle,
+    [property: JsonPropertyName("premiere")] bool? Premiere,
+    [property: JsonPropertyName("lineup")] string? Lineup,
+    [property: JsonPropertyName("year")] int? Year,
+    [property: JsonPropertyName("rating")] string? Rating,
+    [property: JsonPropertyName("movie")] bool? Movie)
+{
+    /// <summary>Maps an engine block to the wire format.</summary>
+    /// <param name="block">Engine block.</param>
+    /// <returns>The DTO.</returns>
+    public static GuideProgramDto From(ScheduledBlock block)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+        var item = block.Item;
+        return new GuideProgramDto(
+            block.Slots.Count > 0 ? block.Slots[0].GuideGroup : "g-" + block.BlockId,
+            block.StartUtc,
+            block.EndUtc,
+            item?.ItemId.ToString("N", CultureInfo.InvariantCulture),
+            item?.Title,
+            item?.EpisodeLabel,
+            item?.EpisodeTitle,
+            block.IsPremiere ? true : null,
+            block.Lineup,
+            item?.ProductionYear,
+            string.IsNullOrWhiteSpace(item?.OfficialRating) ? null : item.OfficialRating,
+            item?.IsMovie == true ? true : null);
+    }
+}
+
 /// <summary>A slot on a channel's timeline.</summary>
 /// <param name="SlotId">Deterministic slot id.</param>
 /// <param name="Kind">program, commercial, bumper, filler, stream or generated.</param>
@@ -136,6 +206,10 @@ public sealed record SlotDto(
     [property: JsonPropertyName("rating")] string? Rating = null,
     [property: JsonPropertyName("movie")] bool? Movie = null)
 {
+    // The media source is the item itself unless it has several versions; then it's needed to pick the right one.
+    private static string? MediaSourceOrNull(PoolItem? item)
+        => item is null || Guid.TryParse(item.MediaSourceId, out var source) && source == item.ItemId ? null : item.MediaSourceId;
+
     /// <summary>Maps an engine slot to the wire format.</summary>
     /// <param name="slot">Engine slot.</param>
     /// <returns>The DTO.</returns>
@@ -148,7 +222,7 @@ public sealed record SlotDto(
             slot.StartUtc,
             slot.EndUtc,
             slot.Item?.ItemId.ToString("N", CultureInfo.InvariantCulture),
-            slot.Item?.MediaSourceId,
+            MediaSourceOrNull(slot.Item),
             slot.InPointTicks / TimeSpan.TicksPerMillisecond,
             slot.OutPointTicks / TimeSpan.TicksPerMillisecond,
             slot.Item?.Title,

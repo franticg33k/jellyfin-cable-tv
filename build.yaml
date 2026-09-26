@@ -14,6 +14,7 @@ owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
-  0.4.1.0: schedule slots carry year, rating and a movie flag for guide colours and badges.
+  0.4.1.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint,
+  channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag.
   0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and
   pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.
