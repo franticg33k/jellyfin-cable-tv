@@ -85,8 +85,7 @@ public class CableTvLiveTvService : ILiveTvService
             return Task.FromResult(Enumerable.Empty<ProgramInfo>());
         }
 
-        var programs = channel.Timeline
-            .GetBlocks(startDateUtc.ToUniversalTime(), endDateUtc.ToUniversalTime())
+        var programs = GuideMerge.Merge(channel.Timeline.GetBlocks(startDateUtc.ToUniversalTime(), endDateUtc.ToUniversalTime()), channel.Definition.Name)
             .Select(b => ToProgram(channelId, b))
             .ToList();
 
@@ -98,7 +97,14 @@ public class CableTvLiveTvService : ILiveTvService
     {
         var channel = _store.Get(channelId) ?? throw new ResourceNotFoundException($"Unknown Cable TV channel {channelId}.");
         var config = Plugin.Instance?.Configuration;
-        if (config is null || config.FallbackMode == FallbackStreamMode.Off)
+        if (channel.Definition.Kind == ChannelKind.Stream)
+        {
+            _logger.LogInformation("Tuning {Channel} to its outside stream", channelId);
+            return Task.FromResult(ToRemoteSource(channelId + "_stream", channel));
+        }
+
+        // Weather always airs through the continuous stream, which carries the forecast card.
+        if ((config is null || config.FallbackMode == FallbackStreamMode.Off) && channel.Definition.Kind == ChannelKind.Standard)
         {
             var (slot, source) = GetAiring(channel);
             _logger.LogInformation("Tuning {Channel} to {Title} from its start (continuous stream is off)", channelId, slot.Item?.Title);
@@ -106,7 +112,7 @@ public class CableTvLiveTvService : ILiveTvService
         }
 
         _logger.LogInformation("Tuning {Channel} to its continuous stream", channelId);
-        return Task.FromResult(ToStreamSource(channelId + "_live", channel, config.StreamKey));
+        return Task.FromResult(ToStreamSource(channelId + "_live", channel, config?.StreamKey ?? string.Empty));
     }
 
     /// <inheritdoc />
@@ -114,9 +120,20 @@ public class CableTvLiveTvService : ILiveTvService
     {
         var channel = _store.Get(channelId) ?? throw new ResourceNotFoundException($"Unknown Cable TV channel {channelId}.");
         var config = Plugin.Instance?.Configuration;
-        var source = config is null || config.FallbackMode == FallbackStreamMode.Off
-            ? ToFileSource(channelId, GetAiring(channel).Source)
-            : ToStreamSource(channelId, channel, config.StreamKey);
+        MediaSourceInfo source;
+        if (channel.Definition.Kind == ChannelKind.Stream)
+        {
+            source = ToRemoteSource(channelId, channel);
+        }
+        else if (config is null || (config.FallbackMode == FallbackStreamMode.Off && channel.Definition.Kind == ChannelKind.Standard))
+        {
+            source = ToFileSource(channelId, GetAiring(channel).Source);
+        }
+        else
+        {
+            source = ToStreamSource(channelId, channel, config.StreamKey);
+        }
+
         return Task.FromResult(new List<MediaSourceInfo> { source });
     }
 
@@ -196,6 +213,31 @@ public class CableTvLiveTvService : ILiveTvService
             ShowId = item.SeriesId?.ToString("N", CultureInfo.InvariantCulture),
             ImagePath = item.ImagePath,
             HasImage = !string.IsNullOrEmpty(item.ImagePath),
+        };
+    }
+
+    private static MediaSourceInfo ToRemoteSource(string id, ChannelSnapshot channel)
+    {
+        var url = channel.Definition.StreamUrl?.Trim();
+        if (string.IsNullOrEmpty(url))
+        {
+            throw new ResourceNotFoundException($"Cable TV channel {channel.Definition.Id} has no stream URL.");
+        }
+
+        return new MediaSourceInfo
+        {
+            Id = id,
+            Path = url,
+            Protocol = MediaProtocol.Http,
+            Container = url.Contains(".m3u8", StringComparison.OrdinalIgnoreCase) ? "hls" : "mpegts",
+            IsRemote = true,
+            IsInfiniteStream = true,
+            SupportsProbing = true,
+            SupportsDirectPlay = false,
+            SupportsDirectStream = true,
+            SupportsTranscoding = true,
+            RequiresOpening = false,
+            RequiresClosing = false,
         };
     }
 

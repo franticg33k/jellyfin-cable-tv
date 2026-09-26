@@ -57,4 +57,15 @@ public class PluginConfiguration : BasePluginConfiguration
     /// "{LogoBaseUrl}/{slug}.png" (for example "cartoon_network.png"). Channels whose logo isn't set use it first.
     /// </summary>
     public string LogoBaseUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the name clients brand the TV mode with.
+    /// </summary>
+    public string ServiceName { get; set; } = "Cable TV";
+
+    /// <summary>
+    /// Gets or sets named, reusable sets of sources.
+    /// </summary>
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
+    public ContentGroup[] ContentGroups { get; set; } = [];
 }

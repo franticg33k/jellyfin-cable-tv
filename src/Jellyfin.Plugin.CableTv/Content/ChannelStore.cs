@@ -227,8 +227,39 @@ public class ChannelStore
         };
     }
 
+    private static ChannelSnapshot BuildSpecial(ChannelDefinition definition, PluginConfiguration config)
+    {
+        var anchor = definition.AnchorUtc ?? config.ScheduleAnchorUtc;
+        var profile = StreamProfile.For([], FallbackStreamMode.Transcode, config.TranscodeHeight, config.NormalizeLoudness);
+        IChannelTimeline timeline = definition.Kind switch
+        {
+            // A stream is one long programme; hour blocks keep guides tidy.
+            ChannelKind.Stream => new RepeatingTimeline(
+                definition.Id,
+                anchor,
+                SlotKind.Stream,
+                new PoolItem(Guid.Empty, string.Empty, 0, definition.Name) { Path = definition.StreamUrl?.Trim(), EpisodeTitle = "Live" },
+                TimeSpan.FromHours(1)),
+            _ => new RepeatingTimeline(
+                definition.Id,
+                anchor,
+                SlotKind.Generated,
+                new PoolItem(Guid.Empty, string.Empty, 0, "Local Forecast")
+                {
+                    EpisodeTitle = string.IsNullOrWhiteSpace(definition.WeatherLocation) ? null : definition.WeatherLocation.Trim(),
+                },
+                TimeSpan.FromMinutes(30)),
+        };
+        return new ChannelSnapshot(definition, timeline, profile);
+    }
+
     private ChannelSnapshot Build(ChannelDefinition definition, PluginConfiguration config, ResolveContext context)
     {
+        if (definition.Kind != ChannelKind.Standard)
+        {
+            return BuildSpecial(definition, config);
+        }
+
         var pool = _resolver.Resolve(definition, context);
 
         IReadOnlyList<PoolItem> commercials = [];
@@ -258,6 +289,6 @@ public class ChannelStore
             config.FallbackMode,
             config.TranscodeHeight,
             config.NormalizeLoudness);
-        return new ChannelSnapshot(definition, timeline, stream);
+        return new ChannelSnapshot(definition, timeline, stream) { Commercials = commercials };
     }
 }

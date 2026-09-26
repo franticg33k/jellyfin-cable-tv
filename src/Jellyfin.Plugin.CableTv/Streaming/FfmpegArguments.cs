@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using Jellyfin.Plugin.CableTv.Scheduling;
 
 namespace Jellyfin.Plugin.CableTv.Streaming;
@@ -59,7 +60,36 @@ public static class FfmpegArguments
         var length = Seconds(duration.TotalSeconds);
         bool copy;
         string audioMap;
-        if (item?.Path is null)
+        var videoMap = "0:v:0";
+        if (item is { IsAudio: true, Path: not null })
+        {
+            // Music has no picture: its cover art (or a plain background) becomes the video.
+            copy = false;
+            args.AddRange(pace);
+            if (startInItem > TimeSpan.Zero)
+            {
+                args.AddRange(["-ss", Seconds(startInItem.TotalSeconds)]);
+            }
+
+            args.AddRange(["-t", length, "-i", item.Path]);
+            if (startInItem > TimeSpan.Zero)
+            {
+                args.AddRange(["-itsoffset", Seconds(startInItem.TotalSeconds)]);
+            }
+
+            if (!string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
+            {
+                args.AddRange(["-loop", "1", "-framerate", "25", "-t", length, "-i", item.ImagePath]);
+            }
+            else
+            {
+                args.AddRange(["-t", length, "-f", "lavfi", "-i", FormattableString.Invariant($"color=c=0x101830:s={profile.Width}x{profile.Height}:r=25")]);
+            }
+
+            audioMap = "0:a:0";
+            videoMap = "1:v:0";
+        }
+        else if (item?.Path is null)
         {
             copy = false;
             args.AddRange(pace);
@@ -94,7 +124,7 @@ public static class FfmpegArguments
             }
         }
 
-        args.AddRange(["-map", "0:v:0", "-map", audioMap, "-sn", "-dn"]);
+        args.AddRange(["-map", videoMap, "-map", audioMap, "-sn", "-dn"]);
 
         if (copy)
         {
@@ -124,6 +154,39 @@ public static class FfmpegArguments
 
         var startsAt = item?.Path is null ? TimeSpan.Zero : startInItem;
         args.AddRange(["-output_ts_offset", Seconds((TimestampBase + streamPosition - startsAt).TotalSeconds)]);
+        args.AddRange(["-f", "mpegts", "pipe:1"]);
+        return args;
+    }
+
+    /// <summary>
+    /// Builds arguments that air a still image (a weather card) with silence.
+    /// </summary>
+    /// <param name="imagePath">Image file.</param>
+    /// <param name="duration">How long to air it.</param>
+    /// <param name="streamPosition">Time since the stream started.</param>
+    /// <param name="profile">Stream format.</param>
+    /// <param name="initialBurst">Seconds to send faster than real time for a new viewer.</param>
+    /// <returns>The argument list.</returns>
+    public static IReadOnlyList<string> BuildStill(string imagePath, TimeSpan duration, TimeSpan streamPosition, StreamProfile profile, double initialBurst = 0)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var length = Seconds(duration.TotalSeconds);
+        var args = new List<string> { "-hide_banner", "-loglevel", "error", "-nostdin", "-readrate", "1" };
+        if (initialBurst > 0)
+        {
+            args.AddRange(["-readrate_initial_burst", Seconds(initialBurst)]);
+        }
+
+        args.AddRange(["-loop", "1", "-framerate", "25", "-t", length, "-i", imagePath]);
+        args.AddRange(["-t", length, "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]);
+        args.AddRange(["-map", "0:v:0", "-map", "1:a:0"]);
+        args.AddRange(["-vf", FormattableString.Invariant(
+            $"scale={profile.Width}:{profile.Height}:force_original_aspect_ratio=decrease,pad={profile.Width}:{profile.Height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p")]);
+        args.AddRange(profile.VideoCodec == "hevc"
+            ? ["-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error"]
+            : ["-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", "-crf", "23"]);
+        args.AddRange(["-g", "50", "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "2"]);
+        args.AddRange(["-output_ts_offset", Seconds((TimestampBase + streamPosition).TotalSeconds)]);
         args.AddRange(["-f", "mpegts", "pipe:1"]);
         return args;
     }

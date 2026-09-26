@@ -35,6 +35,27 @@ public class ChannelDefinition
     public string? Category { get; set; }
 
     /// <summary>
+    /// Gets or sets what the channel airs: library items (the default), an outside stream, or local weather.
+    /// </summary>
+    public ChannelKind Kind { get; set; } = ChannelKind.Standard;
+
+    /// <summary>
+    /// Gets or sets the stream URL (HLS .m3u8 or MPEG-TS) for a <see cref="ChannelKind.Stream"/> channel.
+    /// </summary>
+    public string? StreamUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the place a <see cref="ChannelKind.Weather"/> channel forecasts, for example "Chicago" or
+    /// "41.88,-87.63".
+    /// </summary>
+    public string? WeatherLocation { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a weather channel uses metric units (°C, km/h).
+    /// </summary>
+    public bool WeatherMetric { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the channel is published.
     /// </summary>
     public bool Enabled { get; set; } = true;

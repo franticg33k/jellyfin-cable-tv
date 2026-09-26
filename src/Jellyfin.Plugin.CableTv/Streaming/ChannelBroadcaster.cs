@@ -51,9 +51,12 @@ internal sealed class ChannelBroadcaster : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private Task? _producer;
 
-    public ChannelBroadcaster(string channelId, ChannelStore store, string ffmpegPath, ILogger logger)
+    private readonly Func<ChannelSnapshot, CancellationToken, Task<string?>> _stillFor;
+
+    public ChannelBroadcaster(string channelId, ChannelStore store, string ffmpegPath, Func<ChannelSnapshot, CancellationToken, Task<string?>> stillFor, ILogger logger)
     {
         _channelId = channelId;
+        _stillFor = stillFor;
         _store = store;
         _ffmpegPath = ffmpegPath;
         _logger = logger;
@@ -172,13 +175,24 @@ internal sealed class ChannelBroadcaster : IAsyncDisposable
                     continue;
                 }
 
-                var args = FfmpegArguments.Build(
-                    slot,
-                    TimeSpan.FromTicks(slot.InPointTicks) + (position - slot.StartUtc),
-                    remaining,
-                    position - streamStart + (RunGap * runs++),
-                    channel.Stream,
-                    first ? InitialBurstSeconds : 0);
+                // A generated slot (weather) airs as a still card drawn by the server.
+                var still = slot.Kind == SlotKind.Generated ? await _stillFor(channel, cancellationToken).ConfigureAwait(false) : null;
+                if (slot.Kind == SlotKind.Generated)
+                {
+                    // Redraw at least every five minutes, so a changed forecast shows.
+                    var run = TimeSpan.FromMinutes(5);
+                    remaining = remaining < run ? remaining : run;
+                }
+
+                var args = still is not null
+                    ? FfmpegArguments.BuildStill(still, remaining, position - streamStart + (RunGap * runs++), channel.Stream, first ? InitialBurstSeconds : 0)
+                    : FfmpegArguments.Build(
+                        slot.Kind == SlotKind.Generated ? slot with { Item = null } : AsAired(slot, channel.Stream),
+                        TimeSpan.FromTicks(slot.InPointTicks) + (position - slot.StartUtc),
+                        remaining,
+                        position - streamStart + (RunGap * runs++),
+                        channel.Stream,
+                        first ? InitialBurstSeconds : 0);
                 first = false;
 
                 if (!await RunAsync(args, cancellationToken).ConfigureAwait(false))
@@ -192,7 +206,7 @@ internal sealed class ChannelBroadcaster : IAsyncDisposable
                     continue;
                 }
 
-                position = slot.EndUtc;
+                position = slot.Kind == SlotKind.Generated ? position + remaining : slot.EndUtc;
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -215,6 +229,10 @@ internal sealed class ChannelBroadcaster : IAsyncDisposable
             }
         }
     }
+
+    // A commercial airs from its converted copy when one was prepared for this stream format.
+    private static ScheduledSlot AsAired(ScheduledSlot slot, StreamProfile profile)
+        => slot is { Kind: SlotKind.Commercial, Item: { } item } ? slot with { Item = CommercialCache.ForStream(item, profile) } : slot;
 
     /// <summary>
     /// Runs one ffmpeg process and fans its output out. Returns false when ffmpeg fails without producing output.

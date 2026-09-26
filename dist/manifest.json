@@ -9,12 +9,12 @@
     "imageUrl": "",
     "versions": [
       {
-        "version": "0.4.1.0",
-        "changelog": "0.4.1.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint, channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag. 0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.",
+        "version": "0.5.0.0",
+        "changelog": "0.5.0.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint, channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag. 0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/cabletv_0.4.1.0.zip",
-        "checksum": "ea2de06ccf7490fff293a3f0ec55a096",
-        "timestamp": "2026-09-26T15:22:37Z"
+        "sourceUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/cabletv_0.5.0.0.zip",
+        "checksum": "2089939acc61a4f73c0f49148343d6ca",
+        "timestamp": "2026-09-26T16:24:17Z"
       }
     ]
   }
