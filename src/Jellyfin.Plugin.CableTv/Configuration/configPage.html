@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cable TV</title>
+</head>
+<body>
+  <div id="CableTvConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-textarea">
+    <div data-role="content">
+      <div class="content-primary">
+        <h2 class="sectionTitle">Cable TV</h2>
+        <p>Channels built from your library, on a schedule that is the same on every device. They appear under Live TV once saved; how many days of listings clients show is set in Jellyfin's own Live TV settings.</p>
+
+        <form id="CableTvConfigForm">
+          <div class="inputContainer">
+            <label class="inputLabel inputLabelUnfocused" for="ScheduleAnchorUtc">Schedule anchor (UTC)</label>
+            <input id="ScheduleAnchorUtc" name="ScheduleAnchorUtc" type="text" is="emby-input" placeholder="2026-01-01T00:00:00Z" />
+            <div class="fieldDescription">Every schedule is computed from this instant. Changing it reshuffles all channels.</div>
+          </div>
+
+          <h3 class="sectionTitle">Channels</h3>
+          <div id="ChannelSummary" class="fieldDescription"></div>
+
+          <div class="inputContainer">
+            <label class="textareaLabel" for="ChannelsJson">Channels (JSON)</label>
+            <textarea id="ChannelsJson" is="emby-textarea" rows="20" spellcheck="false" style="font-family: monospace;"></textarea>
+            <div class="fieldDescription">
+              A list of channels. <code>Sorting</code> is <code>Random</code> or <code>Cyclic</code>.
+              Source <code>Type</code> is <code>Library</code>, <code>Collection</code>, <code>Playlist</code>, <code>Items</code> (use <code>Ids</code>),
+              <code>Genre</code> or <code>Decade</code> (use <code>Values</code>, e.g. <code>["Comedy"]</code> or <code>["1990"]</code>).
+            </div>
+            <div id="JsonError" class="fieldDescription" style="color: #e57373;"></div>
+          </div>
+
+          <div>
+            <button is="emby-button" type="button" id="AddChannel" class="raised button-alt block"><span>Add example channel</span></button>
+            <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
+            <button is="emby-button" type="button" id="RebuildNow" class="raised button-alt block"><span>Rebuild channels now</span></button>
+          </div>
+        </form>
+
+        <h3 class="sectionTitle">Find ids</h3>
+        <p class="fieldDescription">Libraries, collections and playlists on this server, for use in <code>Ids</code>.</p>
+        <div id="IdLookup" class="fieldDescription" style="font-family: monospace; white-space: pre-wrap;"></div>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+      (function () {
+        var pluginId = 'ddef6196-173c-4477-b5e8-72811d8d96e4';
+        var page = document.querySelector('#CableTvConfigPage');
+
+        function exampleChannel(existing) {
+          var n = existing.length + 1;
+          return {
+            Id: 'ch-' + Math.random().toString(36).slice(2, 8),
+            Number: String(n).padStart(4, '0'),
+            Name: 'Channel ' + n,
+            LogoUrl: null,
+            Enabled: true,
+            Sorting: 'Random',
+            ItemTypes: ['Episode', 'Movie'],
+            AllowSpecials: false,
+            Sources: [{ Type: 'Genre', Ids: [], Values: ['Comedy'] }],
+            AnchorUtc: null
+          };
+        }
+
+        function parseChannels() {
+          var error = page.querySelector('#JsonError');
+          error.textContent = '';
+          try {
+            var value = JSON.parse(page.querySelector('#ChannelsJson').value || '[]');
+            if (!Array.isArray(value)) { throw new Error('Top level must be a list.'); }
+            var ids = {};
+            value.forEach(function (c, i) {
+              if (!c.Id) { throw new Error('Channel ' + (i + 1) + ' needs an Id.'); }
+              if (ids[c.Id]) { throw new Error('Duplicate channel Id ' + c.Id + '.'); }
+              ids[c.Id] = true;
+            });
+            return value;
+          } catch (e) {
+            error.textContent = 'Invalid channels: ' + e.message;
+            return null;
+          }
+        }
+
+        function loadSummary() {
+          ApiClient.fetch({ url: ApiClient.getUrl('CableTv/Channels'), type: 'GET', dataType: 'json' }).then(function (r) {
+            var el = page.querySelector('#ChannelSummary');
+            el.textContent = r.channels.length === 0
+              ? 'No channels are live yet.'
+              : r.channels.map(function (c) { return c.number + '  ' + c.name + ' — ' + c.poolSize + ' items'; }).join('\n');
+            el.style.whiteSpace = 'pre-wrap';
+          });
+        }
+
+        function loadIds() {
+          var userId = ApiClient.getCurrentUserId();
+          Promise.all([
+            ApiClient.fetch({ url: ApiClient.getUrl('Library/VirtualFolders'), type: 'GET', dataType: 'json' }),
+            ApiClient.getItems(userId, { IncludeItemTypes: 'BoxSet,Playlist', Recursive: true, SortBy: 'SortName' })
+          ]).then(function (results) {
+            var lines = results[0].map(function (l) { return 'Library     ' + l.ItemId + '  ' + l.Name; });
+            results[1].Items.forEach(function (i) {
+              lines.push((i.Type === 'BoxSet' ? 'Collection  ' : 'Playlist    ') + i.Id + '  ' + i.Name);
+            });
+            page.querySelector('#IdLookup').textContent = lines.join('\n');
+          });
+        }
+
+        page.addEventListener('pageshow', function () {
+          Dashboard.showLoadingMsg();
+          ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+            page.querySelector('#ScheduleAnchorUtc').value = config.ScheduleAnchorUtc;
+            page.querySelector('#ChannelsJson').value = JSON.stringify(config.Channels || [], null, 2);
+            Dashboard.hideLoadingMsg();
+          });
+          loadSummary();
+          loadIds();
+        });
+
+        page.querySelector('#AddChannel').addEventListener('click', function () {
+          var channels = parseChannels();
+          if (!channels) { return; }
+          channels.push(exampleChannel(channels));
+          page.querySelector('#ChannelsJson').value = JSON.stringify(channels, null, 2);
+        });
+
+        page.querySelector('#RebuildNow').addEventListener('click', function () {
+          Dashboard.showLoadingMsg();
+          ApiClient.fetch({ url: ApiClient.getUrl('CableTv/Rebuild'), type: 'POST', dataType: 'json' }).then(function () {
+            Dashboard.hideLoadingMsg();
+            loadSummary();
+          });
+        });
+
+        page.querySelector('#CableTvConfigForm').addEventListener('submit', function (e) {
+          e.preventDefault();
+          var channels = parseChannels();
+          if (!channels) { return false; }
+          Dashboard.showLoadingMsg();
+          ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+            config.ScheduleAnchorUtc = page.querySelector('#ScheduleAnchorUtc').value || config.ScheduleAnchorUtc;
+            config.Channels = channels;
+            ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+              Dashboard.processPluginConfigurationUpdateResult(result);
+              setTimeout(loadSummary, 1500);
+            });
+          });
+          return false;
+        });
+      })();
+    </script>
+  </div>
+</body>
+</html>

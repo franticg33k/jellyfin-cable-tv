@@ -1,0 +1,27 @@
+using System;
+using System.Diagnostics.CodeAnalysis;
+
+namespace Jellyfin.Plugin.CableTv.Configuration;
+
+/// <summary>
+/// One source feeding a channel's content pool.
+/// </summary>
+public class ContentSource
+{
+    /// <summary>
+    /// Gets or sets the source type.
+    /// </summary>
+    public ContentSourceType Type { get; set; }
+
+    /// <summary>
+    /// Gets or sets the item ids (library, collection, playlist or item sources).
+    /// </summary>
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
+    public Guid[] Ids { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the string values (genre names or decade start years).
+    /// </summary>
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
+    public string[] Values { get; set; } = [];
+}

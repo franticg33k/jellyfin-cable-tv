@@ -1,0 +1,14 @@
+# Local Jellyfin 12 test server with the plugin mounted.
+#   dotnet publish src/Jellyfin.Plugin.CableTv -c Release -o artifacts/plugin
+#   podman compose -f dev/compose.yaml up     (or: docker compose ...)
+# Then open http://localhost:8096, finish the wizard, add libraries from /media,
+# and configure channels under Dashboard > Plugins > Cable TV.
+services:
+  jellyfin:
+    image: docker.io/jellyfin/jellyfin:12.0
+    network_mode: host
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      - ./media:/media:ro
+      - ../artifacts/plugin:/config/plugins/CableTv_0.1.0.0:ro
