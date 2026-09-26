@@ -24,4 +24,9 @@ public class ContentSource
     /// </summary>
     [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
     public string[] Values { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets how many times each item from this source airs per cycle (1–10). Only <see cref="ChannelSorting.Random"/> honours it.
+    /// </summary>
+    public int Weight { get; set; } = 1;
 }

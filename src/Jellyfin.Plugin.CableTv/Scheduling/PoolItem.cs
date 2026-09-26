@@ -44,6 +44,27 @@ public sealed record PoolItem(Guid ItemId, string MediaSourceId, long DurationTi
     /// <summary>Gets the local media file path.</summary>
     public string? Path { get; init; }
 
+    /// <summary>Gets the key items are grouped by for series-aware orderings: the series id, or the item id.</summary>
+    public Guid GroupKey => SeriesId ?? ItemId;
+
+    /// <summary>Gets how many times the item airs per cycle under random sorting.</summary>
+    public int Weight { get; init; } = 1;
+
+    /// <summary>Gets the chapter start positions in ticks, used for chapter mid-breaks.</summary>
+    public long[] ChapterTicks { get; init; } = [];
+
+    /// <summary>Gets the video codec, for example "h264" or "hevc".</summary>
+    public string? VideoCodec { get; init; }
+
+    /// <summary>Gets the video width.</summary>
+    public int? Width { get; init; }
+
+    /// <summary>Gets the video height.</summary>
+    public int? Height { get; init; }
+
+    /// <summary>Gets a value indicating whether the item has an audio stream.</summary>
+    public bool HasAudio { get; init; } = true;
+
     /// <summary>Gets the "S02E05" style episode label, or null.</summary>
     public string? EpisodeLabel => SeasonNumber is int s && EpisodeNumber is int e
         ? FormattableString.Invariant($"S{s:00}E{e:00}")
