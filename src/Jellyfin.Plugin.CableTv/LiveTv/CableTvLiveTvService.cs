@@ -2,16 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.CableTv.Configuration;
 using Jellyfin.Plugin.CableTv.Content;
 using Jellyfin.Plugin.CableTv.Scheduling;
 using MediaBrowser.Common.Extensions;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.LiveTv;
+using MediaBrowser.Model.MediaInfo;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.CableTv.LiveTv;
@@ -20,14 +25,15 @@ namespace Jellyfin.Plugin.CableTv.LiveTv;
 /// Publishes the plugin's channels and guide through Jellyfin Live TV, so every client with Live TV support sees them.
 /// </summary>
 /// <remarks>
-/// Phase 1 stream: tuning in plays the file airing now, from its start, and ends with it. The continuous
-/// copy-video / re-encode-audio stream that joins mid-show replaces this in phase 3. Clients that want instant,
-/// transcode-free tune-in use the plugin API directly instead.
+/// Tuning in opens the channel's continuous stream (<see cref="Streaming.StreamManager"/>), which joins the airing
+/// programme at the right point and runs on through breaks and following programmes. Each programme block, breaks
+/// included, is one guide entry. Clients that want instant, transcode-free tune-in use the plugin API instead.
 /// </remarks>
 public class CableTvLiveTvService : ILiveTvService
 {
     private readonly ChannelStore _store;
     private readonly ILibraryManager _libraryManager;
+    private readonly IServerApplicationHost _appHost;
     private readonly ILogger<CableTvLiveTvService> _logger;
 
     /// <summary>
@@ -35,11 +41,13 @@ public class CableTvLiveTvService : ILiveTvService
     /// </summary>
     /// <param name="store">Channel store.</param>
     /// <param name="libraryManager">Library manager.</param>
+    /// <param name="appHost">Server application host.</param>
     /// <param name="logger">Logger.</param>
-    public CableTvLiveTvService(ChannelStore store, ILibraryManager libraryManager, ILogger<CableTvLiveTvService> logger)
+    public CableTvLiveTvService(ChannelStore store, ILibraryManager libraryManager, IServerApplicationHost appHost, ILogger<CableTvLiveTvService> logger)
     {
         _store = store;
         _libraryManager = libraryManager;
+        _appHost = appHost;
         _logger = logger;
     }
 
@@ -76,9 +84,8 @@ public class CableTvLiveTvService : ILiveTvService
         }
 
         var programs = channel.Timeline
-            .GetSlots(startDateUtc.ToUniversalTime(), endDateUtc.ToUniversalTime())
-            .Where(s => s.Kind == SlotKind.Program)
-            .Select(s => ToProgram(channelId, s))
+            .GetBlocks(startDateUtc.ToUniversalTime(), endDateUtc.ToUniversalTime())
+            .Select(b => ToProgram(channelId, b))
             .ToList();
 
         return Task.FromResult<IEnumerable<ProgramInfo>>(programs);
@@ -87,22 +94,28 @@ public class CableTvLiveTvService : ILiveTvService
     /// <inheritdoc />
     public Task<MediaSourceInfo> GetChannelStream(string channelId, string streamId, CancellationToken cancellationToken)
     {
-        var (slot, source) = GetAiring(channelId);
-        _logger.LogInformation(
-            "Tuning {Channel} to {Title} (slot {Slot}, {Offset:F0}s in)",
-            channelId,
-            slot.Item.Title,
-            slot.SlotId,
-            (DateTime.UtcNow - slot.StartUtc).TotalSeconds);
+        var channel = _store.Get(channelId) ?? throw new ResourceNotFoundException($"Unknown Cable TV channel {channelId}.");
+        var config = Plugin.Instance?.Configuration;
+        if (config is null || config.FallbackMode == FallbackStreamMode.Off)
+        {
+            var (slot, source) = GetAiring(channel);
+            _logger.LogInformation("Tuning {Channel} to {Title} from its start (continuous stream is off)", channelId, slot.Item?.Title);
+            return Task.FromResult(ToFileSource(channelId + "_" + slot.SlotId, source));
+        }
 
-        return Task.FromResult(ToLiveSource(channelId + "_" + slot.SlotId, source));
+        _logger.LogInformation("Tuning {Channel} to its continuous stream", channelId);
+        return Task.FromResult(ToStreamSource(channelId + "_live", channel, config.StreamKey));
     }
 
     /// <inheritdoc />
     public Task<List<MediaSourceInfo>> GetChannelStreamMediaSources(string channelId, CancellationToken cancellationToken)
     {
-        var (_, source) = GetAiring(channelId);
-        return Task.FromResult(new List<MediaSourceInfo> { ToLiveSource(channelId, source) });
+        var channel = _store.Get(channelId) ?? throw new ResourceNotFoundException($"Unknown Cable TV channel {channelId}.");
+        var config = Plugin.Instance?.Configuration;
+        var source = config is null || config.FallbackMode == FallbackStreamMode.Off
+            ? ToFileSource(channelId, GetAiring(channel).Source)
+            : ToStreamSource(channelId, channel, config.StreamKey);
+        return Task.FromResult(new List<MediaSourceInfo> { source });
     }
 
     /// <inheritdoc />
@@ -144,12 +157,12 @@ public class CableTvLiveTvService : ILiveTvService
     private static NotSupportedException RecordingNotSupported()
         => new("Cable TV channels are built from your library; there is nothing to record.");
 
-    private static ProgramInfo ToProgram(string channelId, ScheduledSlot slot)
+    private static ProgramInfo ToProgram(string channelId, ScheduledBlock block)
     {
-        var item = slot.Item;
+        var item = block.Item;
         return new ProgramInfo
         {
-            Id = channelId + "_" + slot.SlotId,
+            Id = channelId + "_" + block.BlockId,
             ChannelId = channelId,
             Name = item.Title,
             EpisodeTitle = item.EpisodeTitle,
@@ -159,8 +172,8 @@ public class CableTvLiveTvService : ILiveTvService
             Genres = item.Genres.ToList(),
             OfficialRating = item.OfficialRating,
             ProductionYear = item.ProductionYear,
-            StartDate = slot.StartUtc,
-            EndDate = slot.EndUtc,
+            StartDate = block.StartUtc,
+            EndDate = block.EndUtc,
             IsMovie = item.IsMovie,
             IsSeries = item.SeriesId.HasValue,
             IsRepeat = true,
@@ -171,7 +184,7 @@ public class CableTvLiveTvService : ILiveTvService
         };
     }
 
-    private static MediaSourceInfo ToLiveSource(string id, MediaSourceInfo source) => new()
+    private static MediaSourceInfo ToFileSource(string id, MediaSourceInfo source) => new()
     {
         Id = id,
         Path = source.Path,
@@ -190,15 +203,68 @@ public class CableTvLiveTvService : ILiveTvService
         RequiresClosing = true,
     };
 
-    private (ScheduledSlot Slot, MediaSourceInfo Source) GetAiring(string channelId)
+    private MediaSourceInfo ToStreamSource(string id, ChannelSnapshot channel, string key)
     {
-        var channel = _store.Get(channelId) ?? throw new ResourceNotFoundException($"Unknown Cable TV channel {channelId}.");
-        var slot = channel.Timeline.GetSlotAt(DateTime.UtcNow)
+        var profile = channel.Stream;
+        var url = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0}/CableTv/Stream/{1}?key={2}",
+            _appHost.GetApiUrlForLocalAccess(IPAddress.Loopback, false).TrimEnd('/'),
+            Uri.EscapeDataString(channel.Definition.Id),
+            Uri.EscapeDataString(key));
+
+        return new MediaSourceInfo
+        {
+            Id = id,
+            Path = url,
+            Protocol = MediaProtocol.Http,
+            Container = "mpegts",
+            IsRemote = false,
+            IsInfiniteStream = true,
+            SupportsProbing = false,
+            SupportsDirectPlay = false,
+            SupportsDirectStream = true,
+            SupportsTranscoding = true,
+            RequiresOpening = true,
+            RequiresClosing = true,
+
+            // Without this Jellyfin's ffmpeg analyses 200 s of input before it starts, which on a live source means
+            // waiting 200 s. The stream's format is declared below, so a short look is enough.
+            AnalyzeDurationMs = 2000,
+            MediaStreams =
+            [
+                new MediaStream
+                {
+                    Type = MediaStreamType.Video,
+                    Index = 0,
+                    Codec = profile.VideoCodec,
+                    Width = profile.Width,
+                    Height = profile.Height,
+                    IsInterlaced = false,
+                },
+                new MediaStream
+                {
+                    Type = MediaStreamType.Audio,
+                    Index = 1,
+                    Codec = "aac",
+                    Channels = 2,
+                    SampleRate = 48000,
+                    BitRate = 192000,
+                    IsDefault = true,
+                },
+            ],
+        };
+    }
+
+    private (ScheduledSlot Slot, MediaSourceInfo Source) GetAiring(ChannelSnapshot channel)
+    {
+        var channelId = channel.Definition.Id;
+        var slot = channel.Timeline.GetBlocks(DateTime.UtcNow, DateTime.UtcNow.AddTicks(1)).FirstOrDefault()?.Slots[0]
                    ?? throw new ResourceNotFoundException($"Cable TV channel {channelId} has no content.");
 
-        if (_libraryManager.GetItemById(slot.Item.ItemId) is not IHasMediaSources item)
+        if (slot.Item is null || _libraryManager.GetItemById(slot.Item.ItemId) is not IHasMediaSources item)
         {
-            throw new ResourceNotFoundException($"Item {slot.Item.ItemId} airing on {channelId} is no longer in the library.");
+            throw new ResourceNotFoundException($"The programme airing on {channelId} is no longer in the library.");
         }
 
         var source = item.GetMediaSources(false).FirstOrDefault(s => s.Id == slot.Item.MediaSourceId)

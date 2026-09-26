@@ -11,4 +11,4 @@ services:
       - ./config:/config
       - ./cache:/cache
       - ./media:/media:ro
-      - ../artifacts/plugin:/config/plugins/CableTv_0.1.0.0:ro
+      - ../artifacts/plugin:/config/plugins/CableTv_dev:ro

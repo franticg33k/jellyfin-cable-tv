@@ -2,10 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
+using Jellyfin.Plugin.CableTv.Configuration;
 using Jellyfin.Plugin.CableTv.Content;
 using Jellyfin.Plugin.CableTv.Scheduling;
+using Jellyfin.Plugin.CableTv.Streaming;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jellyfin.Plugin.CableTv.Api;
@@ -31,16 +37,19 @@ public class CableTvController : ControllerBase
 
     private readonly ChannelStore _store;
     private readonly GuideRefresher _refresher;
+    private readonly StreamManager _streams;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CableTvController"/> class.
     /// </summary>
     /// <param name="store">Channel store.</param>
     /// <param name="refresher">Guide refresher.</param>
-    public CableTvController(ChannelStore store, GuideRefresher refresher)
+    /// <param name="streams">Stream manager.</param>
+    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams)
     {
         _store = store;
         _refresher = refresher;
+        _streams = streams;
     }
 
     /// <summary>
@@ -175,6 +184,74 @@ public class CableTvController : ControllerBase
     {
         _refresher.RebuildAndRefreshGuide();
         return GetChannels();
+    }
+
+    /// <summary>
+    /// Previews a channel from unsaved settings: resolves its pool and returns the coming slots. Administrators only.
+    /// </summary>
+    /// <param name="channel">Channel settings as edited, not yet saved.</param>
+    /// <param name="hours">Hours to preview from now (1–48).</param>
+    /// <returns>The preview.</returns>
+    [HttpPost("Preview")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<PreviewResponse> Preview([FromBody, Required] ChannelDefinition channel, [FromQuery] int hours = 6)
+    {
+        if (string.IsNullOrWhiteSpace(channel.Id))
+        {
+            return BadRequest("The channel needs an Id.");
+        }
+
+        var timeline = _store.Preview(channel);
+        var now = DateTime.UtcNow;
+        var slots = timeline.GetSlots(now, now.AddHours(Math.Clamp(hours, 1, 48))).Select(SlotDto.From).ToList();
+        return new PreviewResponse(now, timeline.PoolSize, TimeSpan.FromTicks(timeline.CycleTicks).TotalHours, timeline.Version, slots);
+    }
+
+    /// <summary>
+    /// The channel's continuous MPEG-TS stream. Read by the server's own ffmpeg when a Live TV client tunes in; it
+    /// authenticates with the plugin's stream key rather than a user token.
+    /// </summary>
+    /// <param name="channelId">Channel id.</param>
+    /// <param name="key">Stream key.</param>
+    /// <returns>A task that completes when the reader disconnects.</returns>
+    [HttpGet("Stream/{channelId}")]
+    [AllowAnonymous]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task GetStream([FromRoute] string channelId, [FromQuery] string? key)
+    {
+        var expected = Plugin.Instance?.Configuration.StreamKey;
+        if (string.IsNullOrEmpty(expected)
+            || key is null
+            || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(expected)))
+        {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        if (_store.Get(channelId) is null)
+        {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var aborted = HttpContext.RequestAborted;
+        Response.ContentType = "video/mp2t";
+        Response.Headers.CacheControl = "no-cache, no-store";
+        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        using var subscription = _streams.Subscribe(channelId);
+        try
+        {
+            await foreach (var chunk in subscription.Reader.ReadAllAsync(aborted).ConfigureAwait(false))
+            {
+                await Response.Body.WriteAsync(chunk, aborted).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (aborted.IsCancellationRequested)
+        {
+        }
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

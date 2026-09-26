@@ -1,5 +1,6 @@
 using Jellyfin.Plugin.CableTv.Content;
 using Jellyfin.Plugin.CableTv.LiveTv;
+using Jellyfin.Plugin.CableTv.Streaming;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Plugins;
@@ -18,6 +19,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ContentPoolResolver>();
         serviceCollection.AddSingleton<ChannelStore>();
         serviceCollection.AddSingleton<GuideRefresher>();
+        serviceCollection.AddSingleton<StreamManager>();
         serviceCollection.AddSingleton<ILiveTvService, CableTvLiveTvService>();
         serviceCollection.AddHostedService<ConfigurationWatcher>();
     }
