@@ -15,15 +15,15 @@ The work is built from scratch; no NostalgiaTV code or assets are used.
 
 ## Install
 
-Requires **Jellyfin 12.x**. The installable package is [`dist/cabletv_0.3.1.0.zip`](dist/).
+Requires **Jellyfin 12.x**. The installable package is [`dist/cabletv_0.4.0.0.zip`](dist/).
 
 **Option A: drop it in (works today).**
 
 1. Stop Jellyfin.
-2. Unzip `cabletv_0.3.1.0.zip` into a new folder `<jellyfin config>/plugins/Cable TV_0.3.1.0/`
+2. Unzip `cabletv_0.4.0.0.zip` into a new folder `<jellyfin config>/plugins/Cable TV_0.4.0.0/`
    (Docker: `/config/plugins/…`; Linux packages: `/var/lib/jellyfin/plugins/…`;
    Windows: `%ProgramData%\Jellyfin\Server\plugins\…`).
-3. Start Jellyfin. **Dashboard → Plugins** lists *Cable TV 0.3.1.0*.
+3. Start Jellyfin. **Dashboard → Plugins** lists *Cable TV 0.4.0.0*.
 
 **Option B: plugin repository (installs and updates from the dashboard).**
 
@@ -41,9 +41,48 @@ Open **Dashboard → Plugins → Cable TV**. The page is a form:
 - **Live TV stream** and global **Commercials** sources.
 - **Channels**: pick a channel on the left, edit it on the right. Sources use pickers for your libraries,
   collections and playlists, with genre suggestions.
+- **Add channels**: *Suggest channels* proposes one channel per TV network, TV and movie genre, decade and
+  collection, plus kids and holiday channels, counted from your library. *Quick channel* makes a channel from one
+  genre, network, collection, playlist, library, year range, tag, rating, title keyword or list of titles.
 - **Preview** shows what the selected channel would air over the next 6 hours using the unsaved settings.
 - **Save** rebuilds the channels and refreshes the Live TV guide. The channels then appear under **Live TV**.
 - **Advanced** holds the same settings as JSON, plus the ids on your server.
+
+### Import and export
+
+**Import and export** on the same page reads three kinds of file. *Check* reports, for each channel, which titles
+your library has; *Import* saves the result.
+
+- **Lineup CSV**, one row per show or movie:
+
+  ```csv
+  Channel Number,Channel Name,Title,Release Year
+  2,Toon Town,Dexter's Laboratory,1996
+  2,Toon Town,"Ed, Edd n Eddy",1999
+  ```
+
+  Titles are matched by name, ignoring case, accents, punctuation, "&"/"and" and a leading "The". The year tells
+  remakes apart; titles the library doesn't have simply don't air. *Merge* adds new channels and replaces the titles
+  of channels with the same name, keeping their settings. *Replace* makes the file the whole lineup. *Seasonal* turns
+  the file into a holiday lineup (name, dates, replace or mix) on the existing channels, which is how Christmas or
+  Halloween lineups are imported.
+- **Episodes CSV** (`Show Title,Episode Title`) pins holiday specials into a seasonal lineup on every channel that
+  carries the show, or on the channel you pick.
+- **Channel pack** (JSON, from *Export channels*): every setting. Libraries, collections, playlists and items are
+  found by name on the importing server, so packs can be shared.
+
+*Export lineup (CSV)* lists what each channel airs, so a lineup can be edited in a spreadsheet and imported back.
+
+### Logos
+
+Each channel's logo is, in order: its own **Logo** (an image URL, or `studio:Network Name`); the image at
+`{Logo pack URL}/{channel_name}.png` when a logo pack URL is set (`Cartoon Network` → `cartoon_network.png`,
+`HBO+` → `hbo_plus.png`); the logo Jellyfin has for a studio or TV network with the channel's name (install the
+**Studio Images** plugin to download network logos); otherwise a generated logo with the channel's name. No
+third-party logos ship with the plugin; a logo pack is any folder of PNGs your server can reach, for example a
+GitHub repository of your own.
+
+### Channel JSON
 
 The JSON form of a channel, for reference:
 
@@ -68,7 +107,9 @@ The JSON form of a channel, for reference:
 | Setting | Meaning |
 |---|---|
 | `Id` | Stable id. It seeds the schedule, so changing it reshuffles the channel. |
-| `Sources` | Union of sources. `Library`, `Collection`, `Playlist`, `Items` take `Ids`; `Genre` takes names and `Decade` start years (`"1990"`) in `Values`. `Weight` (1–10) airs a source's items more often under `Random`. |
+| `Sources` | Union of sources. `Library`, `Collection`, `Playlist`, `Items` take `Ids`. In `Values`: `Genre`, `Studio` (TV networks), `Tag`, `Rating` take names; `Decade` start years (`"1990"`); `Years` years or ranges (`"1985-1994"`); `Keyword` words in the title; `Titles` show or movie titles, optionally `"Title (Year)"`; `Episodes` `"Show :: Episode title"`. `Exclude: true` removes a source's items from the channel. `Weight` (1–10) airs a source's items more often under `Random`. |
+| `LogoUrl` | Image URL, `studio:Name`, or empty for automatic (see Logos). |
+| `Category` | Guide group, for example `Kids`; returned by the API. |
 | `Sorting` | `Random`, `Cyclic`, `RoundRobin` (one episode per series in turn), `Block` (`BlockSize` episodes per series), `Marathon` (whole series back to back, series order reshuffled each pass). |
 | `CommercialsEnabled` | Plan breaks. Commercials come from `CommercialSources`, or the page's global *Commercial sources* when empty (for example a *Home videos* library of ads). |
 | `GridMinutes` | Pad every programme to the grid (for example 30): a 22-minute episode gets 8 minutes of breaks, topped up with filler when no commercial fits. |
@@ -103,6 +144,7 @@ The JSON form of a channel, for reference:
 | 3. Fallback stream | Continuous copy-video / AAC-audio stream, shared per channel, timestamps that never rewind | Done |
 | 4. Commercials | Break planning, halfway and chapter mid-breaks, fill-to-grid, one guide entry per programme | Done (pre-converting the ad library is not done; Auto mode transcodes mismatched ads on the fly) |
 | 5. Scheduling depth | Sorting modes, weights, time slots, restricted hours, seasonal lineups, premieres, settings form, preview | Done |
+| 5b. Lineups | Suggestions, quick channels, CSV/JSON import and export, title/network/tag/rating/year/keyword sources, logos | Done (0.4.0.0) |
 | 6–7. Presentation, extras | Branding, trailer pools, stream channels, web TV mode | Planned |
 
 Known limits:
@@ -111,6 +153,7 @@ Known limits:
 - Jellyfin waits for a few HLS segments before playback starts, so tune-in takes a few seconds to ~20 s
   depending on the source's keyframe spacing.
 - A rebuild that finds new or removed content reshuffles that channel.
+- Jellyfin doesn't show channel categories in its own guide yet; they're available to API clients.
 - With time slots or seasons, an ordered lineup's position is estimated from airtime, so an episode can
   occasionally be skipped or repeated when a slot starts.
 
@@ -131,7 +174,10 @@ Pushing a tag like `v0.2.0.0` runs the release workflow, which attaches the zip 
 ```
 src/Jellyfin.Plugin.CableTv/
   Scheduling/     Deterministic timeline engine: sorting, weights, blocks and breaks
-  Content/        Library pool resolution, channel store, guide refresh
+  Library/        Library index and title matching
+  Content/        Pool resolution, channel store, guide refresh
+  Packs/          CSV and JSON import/export, channel suggestions
+  Logos/          Channel logos (network images, logo packs, generated)
   Streaming/      Continuous MPEG-TS stream: ffmpeg arguments, per-channel broadcaster
   LiveTv/         ILiveTvService: channels, guide, stream source
   Api/            /CableTv REST API (the client contract)
@@ -143,3 +189,8 @@ scripts/          Packaging
 dist/             Installable zip and repository manifest
 dev/              Local Jellyfin 12 test server
 ```
+
+## Credits
+
+Generated logos use the [Oswald](https://fonts.google.com/specimen/Oswald) font, embedded under the SIL Open Font
+License (`src/Jellyfin.Plugin.CableTv/Logos/Oswald-OFL.txt`).

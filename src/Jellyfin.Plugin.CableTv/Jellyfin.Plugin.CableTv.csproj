@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <RootNamespace>Jellyfin.Plugin.CableTv</RootNamespace>
-    <AssemblyVersion>0.3.1.0</AssemblyVersion>
-    <FileVersion>0.3.1.0</FileVersion>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <FileVersion>0.4.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,11 +14,14 @@
     <!-- Provided by the Jellyfin server at runtime; never copy into the plugin folder. -->
     <PackageReference Include="Jellyfin.Controller" Version="12.0.0" ExcludeAssets="runtime" />
     <PackageReference Include="Jellyfin.Model" Version="12.0.0" ExcludeAssets="runtime" />
+    <!-- Jellyfin ships SkiaSharp (its image processing uses it); the plugin uses the server's copy to draw logos. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" ExcludeAssets="runtime;native" />
   </ItemGroup>
 
   <ItemGroup>
     <None Remove="Configuration\configPage.html" />
     <EmbeddedResource Include="Configuration\configPage.html" />
+    <EmbeddedResource Include="Logos\Oswald.ttf" />
   </ItemGroup>
 
   <ItemGroup>

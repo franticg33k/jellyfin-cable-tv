@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.CableTv.Configuration;
 using Jellyfin.Plugin.CableTv.Content;
+using Jellyfin.Plugin.CableTv.Packs;
 using Jellyfin.Plugin.CableTv.Scheduling;
 using Jellyfin.Plugin.CableTv.Streaming;
 using Microsoft.AspNetCore.Authorization;
@@ -38,6 +40,8 @@ public class CableTvController : ControllerBase
     private readonly ChannelStore _store;
     private readonly GuideRefresher _refresher;
     private readonly StreamManager _streams;
+    private readonly PackService _packs;
+    private readonly ChannelSuggester _suggester;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CableTvController"/> class.
@@ -45,11 +49,15 @@ public class CableTvController : ControllerBase
     /// <param name="store">Channel store.</param>
     /// <param name="refresher">Guide refresher.</param>
     /// <param name="streams">Stream manager.</param>
-    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams)
+    /// <param name="packs">Import and export.</param>
+    /// <param name="suggester">Channel suggestions.</param>
+    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams, PackService packs, ChannelSuggester suggester)
     {
         _store = store;
         _refresher = refresher;
         _streams = streams;
+        _packs = packs;
+        _suggester = suggester;
     }
 
     /// <summary>
@@ -65,9 +73,10 @@ public class CableTvController : ControllerBase
                 c.Definition.Id,
                 c.Definition.Number,
                 c.Definition.Name,
-                NullIfBlank(c.Definition.LogoUrl),
+                LogoUrl(c),
                 c.Timeline.Version,
-                c.Timeline.PoolSize))
+                c.Timeline.PoolSize,
+                string.IsNullOrWhiteSpace(c.Definition.Category) ? null : c.Definition.Category.Trim()))
             .ToList();
 
         return new ChannelListResponse(DateTime.UtcNow, channels);
@@ -168,7 +177,7 @@ public class CableTvController : ControllerBase
     public ActionResult<PresentationResponse> GetPresentation()
     {
         var channels = _store.Channels
-            .Select(c => new ChannelBrandingDto(c.Definition.Id, NullIfBlank(c.Definition.LogoUrl)))
+            .Select(c => new ChannelBrandingDto(c.Definition.Id, LogoUrl(c)))
             .ToList();
         return new PresentationResponse("Cable TV", channels);
     }
@@ -207,6 +216,122 @@ public class CableTvController : ControllerBase
         var now = DateTime.UtcNow;
         var slots = timeline.GetSlots(now, now.AddHours(Math.Clamp(hours, 1, 48))).Select(SlotDto.From).ToList();
         return new PreviewResponse(now, timeline.PoolSize, TimeSpan.FromTicks(timeline.CycleTicks).TotalHours, timeline.Version, slots);
+    }
+
+    /// <summary>
+    /// A channel's logo: its own image, the TV network's logo from Jellyfin, or a generated one. Anonymous so image
+    /// tags and Live TV clients can load it.
+    /// </summary>
+    /// <param name="channelId">Channel id.</param>
+    /// <returns>The image, or a redirect to it.</returns>
+    [HttpGet("Logo/{channelId}")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult GetLogo([FromRoute] string channelId)
+    {
+        var logo = _store.Get(channelId)?.Logo;
+        if (logo?.RemoteUrl is { } url)
+        {
+            return Redirect(url);
+        }
+
+        if (logo?.LocalPath is not { } path || !System.IO.File.Exists(path))
+        {
+            return NotFound();
+        }
+
+        Response.Headers.CacheControl = "public, max-age=86400";
+        var type = Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            ".gif" => "image/gif",
+            ".svg" => "image/svg+xml",
+            _ => "image/png",
+        };
+        return PhysicalFile(path, type);
+    }
+
+    /// <summary>
+    /// Suggests channels the library could fill: TV networks, genres, decades, kids, holidays and collections.
+    /// Administrators only.
+    /// </summary>
+    /// <param name="minTitles">Fewest shows or movies a suggested channel draws from.</param>
+    /// <returns>The suggestions.</returns>
+    [HttpGet("Suggestions")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<ChannelSuggestion>> GetSuggestions([FromQuery] int minTitles = 3)
+        => Ok(_suggester.Suggest(Plugin.Instance?.Configuration ?? new PluginConfiguration(), minTitles));
+
+    /// <summary>
+    /// Imports a lineup CSV, an episodes CSV or a JSON channel pack. Without <c>apply</c> it only reports what would
+    /// change and which titles the library has. Administrators only.
+    /// </summary>
+    /// <param name="request">The file and options.</param>
+    /// <returns>The report.</returns>
+    [HttpPost("Import")]
+    [Authorize(Policy = "RequiresElevation")]
+    [RequestSizeLimit(32 * 1024 * 1024)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<ImportPlan> Import([FromBody, Required] ImportRequest request)
+    {
+        if (Plugin.Instance is not { } plugin)
+        {
+            return BadRequest("The plugin isn't loaded.");
+        }
+
+        ImportPlan plan;
+        try
+        {
+            plan = _packs.Import(request, plugin.Configuration);
+        }
+        catch (FormatException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        if (request.Apply)
+        {
+            var config = plugin.Configuration;
+            config.Channels = plan.Channels;
+            if (plan.CommercialSources is not null)
+            {
+                config.CommercialSources = plan.CommercialSources;
+            }
+
+            // Raises ConfigurationChanged, which rebuilds the channels in the background.
+            plugin.UpdateConfiguration(config);
+            plan.Applied = true;
+        }
+
+        return plan;
+    }
+
+    /// <summary>
+    /// Exports channels as a JSON channel pack or a lineup CSV. Administrators only.
+    /// </summary>
+    /// <param name="format">json (default) or csv.</param>
+    /// <param name="channelIds">Comma-separated channel ids; all channels when omitted.</param>
+    /// <returns>The file.</returns>
+    [HttpGet("Export")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult Export([FromQuery] string? format, [FromQuery] string? channelIds)
+    {
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var ids = (channelIds ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var stamp = DateTime.Now.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+        if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
+        {
+            return File(Encoding.UTF8.GetBytes(_packs.ExportCsv(config, ids)), "text/csv", $"cabletv-lineup-{stamp}.csv");
+        }
+
+        var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(_packs.ExportPack(config, ids), PackService.Json);
+        return File(json, "application/json", $"cabletv-channels-{stamp}.json");
     }
 
     /// <summary>
@@ -254,5 +379,15 @@ public class CableTvController : ControllerBase
         }
     }
 
-    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    private string? LogoUrl(ChannelSnapshot channel)
+    {
+        if (channel.Logo is not { } logo)
+        {
+            return null;
+        }
+
+        // The version changes when the logo does, so clients don't keep showing a cached old one.
+        var version = StableHash.ToHex(StableHash.Add(StableHash.Start(), logo.LocalPath ?? logo.RemoteUrl ?? string.Empty), 8);
+        return $"{Request.Scheme}://{Request.Host}{Request.PathBase}/CableTv/Logo/{Uri.EscapeDataString(channel.Definition.Id)}?v={version}";
+    }
 }

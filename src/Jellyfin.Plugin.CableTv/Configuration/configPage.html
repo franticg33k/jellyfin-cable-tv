@@ -29,6 +29,12 @@
       #CableTvConfigPage .ctv-pre { white-space: pre-wrap; font-family: monospace; font-size: 0.85em; opacity: 0.85; margin: 0.5em 0 1em; }
       #CableTvConfigPage details > summary { cursor: pointer; margin: 0.6em 0; }
       #CableTvConfigPage .ctv-error { color: #ef9a9a; }
+      #CableTvConfigPage .ctv-ok { color: #a5d6a7; }
+      #CableTvConfigPage .ctv-logo { height: 3em; max-width: 6em; object-fit: contain; border-radius: 4px; }
+      #CableTvConfigPage .ctv-suggest { max-height: 26em; overflow: auto; margin: 0.4em 0; }
+      #CableTvConfigPage .ctv-suggest h5 { margin: 0.7em 0 0.2em; }
+      #CableTvConfigPage .ctv-suggest label { display: block; margin: 0.15em 0; }
+      #CableTvConfigPage .ctv-suggest label.exists { opacity: 0.5; }
     </style>
     <div data-role="content">
       <div class="content-primary">
@@ -45,7 +51,13 @@
               <input type="text" id="ScheduleAnchorUtc" placeholder="2026-01-01T00:00:00Z" />
             </label>
           </div>
+          <div class="ctv-row">
+            <label class="ctv-field grow"><span>Logo pack URL (optional). Channels without their own logo use {URL}/{channel_name}.png, e.g. …/cartoon_network.png</span>
+              <input type="text" id="LogoBaseUrl" placeholder="https://example.com/logos" />
+            </label>
+          </div>
           <datalist id="ctvZones"></datalist>
+          <datalist id="ctvStudios"></datalist>
 
           <h3 class="sectionTitle">Live TV stream</h3>
           <div class="ctv-row">
@@ -64,6 +76,38 @@
           <h3 class="sectionTitle">Commercials</h3>
           <p class="ctv-hint">Used by channels with commercials on that don't list their own. A <em>Home videos</em> library of ads works well.</p>
           <div id="GlobalCommercials"></div>
+
+          <h3 class="sectionTitle">Add channels</h3>
+          <div class="ctv-card">
+            <h4>Suggestions from your library</h4>
+            <p class="ctv-hint">One channel per TV network, genre, decade and collection, plus kids and holiday channels, counted from what your library holds. Added channels appear in the list below; save to put them on air.</p>
+            <div class="ctv-row">
+              <label class="ctv-field"><span>At least this many shows or movies</span><input type="number" id="SuggestMin" min="2" max="50" value="3" /></label>
+              <button type="button" class="ctv-btn" id="SuggestButton">Suggest channels</button>
+            </div>
+            <div id="SuggestList" class="ctv-suggest"></div>
+            <div class="ctv-row" id="SuggestActions" style="display:none">
+              <button type="button" class="ctv-btn" id="SuggestAll">Select all new</button>
+              <button type="button" class="ctv-btn" id="SuggestAdd">Add selected channels</button>
+            </div>
+          </div>
+          <div class="ctv-card">
+            <h4>Quick channel</h4>
+            <p class="ctv-hint">Make a channel from one genre, network, collection, playlist, library, year range, tag, rating, title keyword or list of titles.</p>
+            <div id="QuickSource"></div>
+            <div class="ctv-row">
+              <label class="ctv-field grow"><span>Name (optional)</span><input type="text" id="QuickName" placeholder="Named after the source" /></label>
+              <label class="ctv-field"><span>Airs</span>
+                <select id="QuickKinds">
+                  <option value="Episode,Movie">Shows and movies</option>
+                  <option value="Episode">Shows</option>
+                  <option value="Movie">Movies</option>
+                </select>
+              </label>
+              <button type="button" class="ctv-btn" id="QuickCreate">Create channel</button>
+            </div>
+          </div>
+          <div id="AddMessage" class="ctv-ok"></div>
 
           <h3 class="sectionTitle">Channels</h3>
           <div class="ctv-layout">
@@ -93,6 +137,40 @@
         <button type="button" class="ctv-btn" id="PreviewButton">Preview selected channel</button>
         <pre id="PreviewResult" class="ctv-pre"></pre>
 
+        <h3 class="sectionTitle">Import and export</h3>
+        <p class="ctv-hint">Import a lineup CSV (<code>Channel Number,Channel Name,Title,Release Year</code>, one row per show or movie), an episodes CSV (<code>Show Title,Episode Title</code>) for holiday specials, or a channel pack exported from this page. Titles are matched to your library by name; a year tells remakes apart. Check first to see what matches.</p>
+        <div class="ctv-card">
+          <div class="ctv-row">
+            <label class="ctv-field grow"><span>File (.csv or .json)</span><input type="file" id="ImportFile" accept=".csv,.json,.txt,text/csv,application/json" /></label>
+            <label class="ctv-field"><span>Mode</span>
+              <select id="ImportMode">
+                <option value="Merge">Merge: add new channels, update ones with the same name</option>
+                <option value="Replace">Replace: the file becomes the whole lineup</option>
+                <option value="Season">Seasonal: a holiday lineup for existing channels</option>
+              </select>
+            </label>
+          </div>
+          <div class="ctv-row" id="ImportSeason" style="display:none">
+            <label class="ctv-field grow"><span>Season name</span><input type="text" id="ImportSeasonName" value="Christmas" /></label>
+            <label class="ctv-field"><span>From (MM-DD)</span><input type="text" id="ImportFrom" value="12-01" /></label>
+            <label class="ctv-field"><span>To (MM-DD)</span><input type="text" id="ImportTo" value="12-26" /></label>
+            <label class="ctv-field"><span>Lineup</span>
+              <select id="ImportSeasonMode"><option value="Replace">Replaces usual content</option><option value="Mix">Mixes into usual content</option></select>
+            </label>
+            <label class="ctv-field" id="ImportTargetField"><span>Episodes go to</span><select id="ImportTarget"></select></label>
+          </div>
+          <div class="ctv-row">
+            <button type="button" class="ctv-btn" id="ImportCheck">Check</button>
+            <button type="button" class="ctv-btn" id="ImportApply">Import</button>
+          </div>
+          <div id="ImportResult"></div>
+        </div>
+        <div class="ctv-row">
+          <button type="button" class="ctv-btn" id="ExportJson">Export channels (JSON pack)</button>
+          <button type="button" class="ctv-btn" id="ExportCsv">Export lineup (CSV)</button>
+        </div>
+        <p class="ctv-hint">Exports cover the saved channels. A JSON pack keeps every setting and can be imported on another server; collections and libraries are found there by name.</p>
+
         <details id="Advanced">
           <summary>Advanced: edit channels as JSON</summary>
           <textarea id="ChannelsJson" rows="18" spellcheck="false"></textarea>
@@ -115,8 +193,18 @@
         ];
         var SOURCE_TYPES = [
           ['Library', 'Library'], ['Collection', 'Collection'], ['Playlist', 'Playlist'],
-          ['Genre', 'Genres'], ['Decade', 'Decades'], ['Items', 'Item ids']
+          ['Genre', 'Genres'], ['Studio', 'Networks / studios'], ['Titles', 'Titles'], ['Decade', 'Decades'], ['Years', 'Years'],
+          ['Tag', 'Tags'], ['Rating', 'Ratings'], ['Keyword', 'Title keywords'], ['Episodes', 'Pinned episodes'], ['Items', 'Item ids']
         ];
+        var VALUE_FIELDS = {
+          Genre: ['Genres', 'Comedy, Animation', 'ctvGenres'],
+          Studio: ['Networks or studios (TV networks come from TMDB metadata)', 'NBC, Cartoon Network', 'ctvStudios'],
+          Decade: ['Decades (first year)', '1980, 1990', ''],
+          Years: ['Years or ranges', '1994, 1985-1992', ''],
+          Tag: ['Tags', 'Saturday morning', ''],
+          Rating: ['Ratings', 'TV-Y, TV-Y7, TV-G, G', ''],
+          Keyword: ['Words in the title', 'christmas, halloween', '']
+        };
         var ITEM_TYPES = ['Episode', 'Movie', 'MusicVideo', 'Video'];
         var ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Toronto',
           'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'UTC'];
@@ -215,14 +303,27 @@
                 ids.value = source.Ids.join(', ');
                 ids.addEventListener('input', function () { source.Ids = splitList(ids.value); source.Values = []; });
                 row.appendChild(field('Item ids (series, seasons, episodes, movies)', ids, true));
+              } else if (type === 'Titles' || type === 'Episodes') {
+                // One per line: titles can contain commas.
+                var lines = el('textarea', { rows: String(Math.min(8, Math.max(3, source.Values.length + 1))), placeholder: type === 'Titles' ? 'Adventure Time\nCharmed (1998)' : 'Friends :: The One with the Holiday Armadillo' });
+                lines.value = source.Values.join('\n');
+                lines.addEventListener('input', function () { source.Values = splitLines(lines.value); source.Ids = []; });
+                row.appendChild(field(type === 'Titles' ? 'Shows and movies, one per line; add (year) to pick a version' : 'Episodes, one per line: Show :: Episode title', lines, true));
               } else {
-                var values = el('input', { type: 'text', placeholder: type === 'Genre' ? 'Comedy, Animation' : '1980, 1990', list: type === 'Genre' ? 'ctvGenres' : '' });
+                var spec = VALUE_FIELDS[type] || VALUE_FIELDS.Genre;
+                var values = el('input', { type: 'text', placeholder: spec[1], list: spec[2] });
                 values.value = source.Values.join(', ');
                 values.addEventListener('input', function () { source.Values = splitList(values.value); source.Ids = []; });
-                row.appendChild(field(type === 'Genre' ? 'Genres' : 'Decades (first year)', values, true));
+                row.appendChild(field(spec[0], values, true));
+              }
+
+              if (options.single) {
+                wrap.appendChild(row);
+                return;
               }
 
               if (!options.commercial) {
+                row.appendChild(checkbox(source, 'Exclude', 'Exclude'));
                 row.appendChild(field('Weight', numberInput(source, 'Weight', 1, 10)));
                 if (options.airHours) {
                   row.appendChild(field('Air hours (e.g. 21:00-05:00)', textInput(source, 'AirHours', 'any time')));
@@ -232,11 +333,17 @@
               row.appendChild(button('Remove', function () { sources.splice(index, 1); render(); }, true));
               wrap.appendChild(row);
             });
-            wrap.appendChild(button('Add source', function () { sources.push({ Type: 'Library', Ids: [], Values: [], Weight: 1 }); render(); }));
+            if (!options.single) {
+              wrap.appendChild(button('Add source', function () { sources.push({ Type: 'Library', Ids: [], Values: [], Weight: 1 }); render(); }));
+            }
           }
 
           render();
           return wrap;
+        }
+
+        function splitLines(text) {
+          return text.split('\n').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
         }
 
         function splitList(text) {
@@ -257,9 +364,9 @@
 
         function newChannel() {
           var channels = state.config.Channels;
-          var n = channels.length + 1;
+          var n = channels.reduce(function (max, c) { var v = parseInt(c.Number, 10); return isNaN(v) ? max : Math.max(max, v); }, 0) + 1;
           return normalize({
-            Id: 'ch-' + Math.random().toString(36).slice(2, 8), Number: String(n).padStart(4, '0'), Name: 'Channel ' + n,
+            Id: 'ch-' + Math.random().toString(36).slice(2, 8), Number: String(n), Name: 'Channel ' + n,
             LogoUrl: null, Enabled: true, Sorting: 'Random', BlockSize: 3, ItemTypes: ['Episode', 'Movie'], AllowSpecials: false,
             Sources: [], AnchorUtc: null, CommercialsEnabled: false, GridMinutes: 30, MidBreak: 'Halfway', BreakSeconds: 120
           });
@@ -290,7 +397,14 @@
             field('Number', textInput(channel, 'Number', '0412', renderList)),
             field('Name', textInput(channel, 'Name', '', renderList), true),
             field('Id (keep it fixed: it seeds the schedule)', textInput(channel, 'Id')),
-            field('Logo URL', textInput(channel, 'LogoUrl', 'optional'), true)
+            field('Category (guide group)', textInput(channel, 'Category', 'e.g. Kids'))
+          ]));
+          var logo = el('img', { className: 'ctv-logo', alt: '' });
+          logo.onerror = function () { logo.style.display = 'none'; };
+          logo.src = ApiClient.getUrl('CableTv/Logo/' + encodeURIComponent(channel.Id || 'none')) + '?t=' + Date.now();
+          basics.appendChild(el('div', { className: 'ctv-row' }, [
+            field('Logo: an image URL, studio:Network Name, or empty for the network logo or a generated one', textInput(channel, 'LogoUrl', 'automatic'), true),
+            logo
           ]));
           var types = el('div', { className: 'ctv-days' });
           ITEM_TYPES.forEach(function (t) {
@@ -424,8 +538,12 @@
           return Promise.all([
             ApiClient.fetch({ url: ApiClient.getUrl('Library/VirtualFolders'), type: 'GET', dataType: 'json' }),
             ApiClient.getItems(userId, { IncludeItemTypes: 'BoxSet,Playlist', Recursive: true, SortBy: 'SortName' }),
-            ApiClient.fetch({ url: ApiClient.getUrl('Genres', { Recursive: true, SortBy: 'SortName' }), type: 'GET', dataType: 'json' })
+            ApiClient.fetch({ url: ApiClient.getUrl('Genres', { Recursive: true, SortBy: 'SortName' }), type: 'GET', dataType: 'json' }),
+            ApiClient.fetch({ url: ApiClient.getUrl('Studios', { Recursive: true, SortBy: 'SortName', Limit: 2000 }), type: 'GET', dataType: 'json' }).catch(function () { return { Items: [] }; })
           ]).then(function (r) {
+            var studios = page.querySelector('#ctvStudios');
+            studios.innerHTML = '';
+            (r[3].Items || []).forEach(function (x) { studios.appendChild(el('option', { value: x.Name })); });
             state.library.Library = r[0].map(function (l) { return { id: (l.ItemId || '').replace(/-/g, ''), name: l.Name }; });
             state.library.Collection = r[1].Items.filter(function (i) { return i.Type === 'BoxSet'; }).map(function (i) { return { id: i.Id, name: i.Name }; });
             state.library.Playlist = r[1].Items.filter(function (i) { return i.Type === 'Playlist'; }).map(function (i) { return { id: i.Id, name: i.Name }; });
@@ -456,9 +574,9 @@
         // ---- wiring ----
         page.querySelector('#ctvZones').innerHTML = ZONES.map(function (z) { return '<option value="' + z + '"></option>'; }).join('');
 
-        page.addEventListener('pageshow', function () {
+        function loadConfig() {
           Dashboard.showLoadingMsg();
-          Promise.all([ApiClient.getPluginConfiguration(pluginId), loadLibrary()]).then(function (r) {
+          return Promise.all([ApiClient.getPluginConfiguration(pluginId), loadLibrary()]).then(function (r) {
             var config = r[0];
             config.Channels = (config.Channels || []).map(normalize);
             config.CommercialSources = config.CommercialSources || [];
@@ -469,14 +587,20 @@
             page.querySelector('#FallbackMode').value = config.FallbackMode || 'Auto';
             page.querySelector('#TranscodeHeight').value = config.TranscodeHeight || 720;
             page.querySelector('#NormalizeLoudness').checked = config.NormalizeLoudness !== false;
+            page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
             var global = page.querySelector('#GlobalCommercials');
             global.innerHTML = '';
             global.appendChild(sourceEditor(config.CommercialSources, { commercial: true }));
             renderList();
             renderEditor();
             refreshJson();
+            renderTargets();
             Dashboard.hideLoadingMsg();
-          });
+          }, function () { Dashboard.hideLoadingMsg(); });
+        }
+
+        page.addEventListener('pageshow', function () {
+          loadConfig();
           loadSummary();
         });
 
@@ -567,6 +691,180 @@
           }, function () { Dashboard.hideLoadingMsg(); });
         });
 
+        // ---- add channels ----
+        var suggestions = [];
+
+        function showAdded(count) {
+          var box = page.querySelector('#AddMessage');
+          box.textContent = count ? 'Added ' + count + ' channel' + (count === 1 ? '' : 's') + '. Save to put ' + (count === 1 ? 'it' : 'them') + ' on air.' : '';
+        }
+
+        function addChannels(channels) {
+          var ids = {};
+          state.config.Channels.forEach(function (c) { ids[c.Id] = true; });
+          var added = 0;
+          channels.forEach(function (c) {
+            var id = c.Id;
+            for (var n = 2; ids[id]; n++) { id = c.Id + '-' + n; }
+            c.Id = id;
+            ids[id] = true;
+            state.config.Channels.push(normalize(c));
+            added++;
+          });
+          if (added) {
+            state.selected = state.config.Channels.length - 1;
+            renderList();
+            renderEditor();
+            renderTargets();
+          }
+          showAdded(added);
+        }
+
+        page.querySelector('#SuggestButton').addEventListener('click', function () {
+          var list = page.querySelector('#SuggestList');
+          list.textContent = 'Looking through the library…';
+          ApiClient.fetch({ url: ApiClient.getUrl('CableTv/Suggestions', { minTitles: page.querySelector('#SuggestMin').value || 3 }), type: 'GET', dataType: 'json' }).then(function (r) {
+            suggestions = r;
+            list.innerHTML = '';
+            if (!r.length) { list.textContent = 'Nothing to suggest. Networks and genres come from your library metadata.'; return; }
+            var group = null;
+            r.forEach(function (sg, i) {
+              if (sg.group !== group) { group = sg.group; list.appendChild(el('h5', { text: group })); }
+              var input = el('input', { type: 'checkbox', 'data-index': String(i) });
+              if (sg.exists) { input.disabled = true; }
+              var what = sg.channel.ItemTypes.length === 1 && sg.channel.ItemTypes[0] === 'Movie' ? ' movies' : ' titles';
+              list.appendChild(el('label', { className: sg.exists ? 'exists' : '' }, [input,
+                ' ' + (sg.channel.Number ? sg.channel.Number + '  ' : '') + sg.channel.Name + ' — ' + sg.titles + what + (sg.exists ? ' (already a channel)' : '')]));
+            });
+            page.querySelector('#SuggestActions').style.display = '';
+          }, function () { list.textContent = 'Couldn\'t load suggestions.'; });
+        });
+
+        page.querySelector('#SuggestAll').addEventListener('click', function () {
+          page.querySelectorAll('#SuggestList input:not([disabled])').forEach(function (i) { i.checked = true; });
+        });
+
+        page.querySelector('#SuggestAdd').addEventListener('click', function () {
+          var picked = [];
+          page.querySelectorAll('#SuggestList input:checked').forEach(function (i) {
+            picked.push(suggestions[Number(i.getAttribute('data-index'))].channel);
+            i.checked = false;
+            i.disabled = true;
+          });
+          addChannels(picked);
+        });
+
+        var quick = { Type: 'Genre', Ids: [], Values: [], Weight: 1 };
+        page.querySelector('#QuickSource').appendChild(sourceEditor([quick], { single: true }));
+
+        page.querySelector('#QuickCreate').addEventListener('click', function () {
+          if (!quick.Ids.length && !quick.Values.length) { showAdded(0); page.querySelector('#AddMessage').textContent = 'Pick or type what the channel airs first.'; return; }
+          var kinds = page.querySelector('#QuickKinds').value.split(',');
+          var name = page.querySelector('#QuickName').value.trim();
+          if (!name) {
+            var picked = (state.library[quick.Type] || []).filter(function (x) { return x.id === (quick.Ids[0] || '').replace(/-/g, ''); })[0];
+            name = picked ? picked.name : quick.Values.slice(0, 2).join(' & ');
+            if (kinds.length === 1) { name += kinds[0] === 'Movie' ? ' Movies' : ' TV'; }
+          }
+          var channel = newChannel();
+          channel.Name = name;
+          channel.Id = 'ch-' + name.toLowerCase().replace(/\+/g, '_plus').replace(/&/g, '_and_').replace(/[.']/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+          channel.ItemTypes = kinds;
+          channel.Sorting = kinds.length === 1 && kinds[0] === 'Movie' ? 'Random' : 'RoundRobin';
+          channel.Sources = [JSON.parse(JSON.stringify(quick))];
+          channel.CommercialsEnabled = state.config.CommercialSources.length > 0;
+          if (quick.Type === 'Studio' && quick.Values.length === 1) { channel.LogoUrl = 'studio:' + quick.Values[0]; }
+          addChannels([channel]);
+        });
+
+        // ---- import / export ----
+        function renderTargets() {
+          var target = page.querySelector('#ImportTarget');
+          if (!target || !state.config) { return; }
+          target.innerHTML = '';
+          target.appendChild(el('option', { value: '', text: 'Every channel with that show' }));
+          state.config.Channels.forEach(function (c) { target.appendChild(el('option', { value: c.Id, text: c.Number + '  ' + c.Name })); });
+        }
+
+        var importText = null;
+        function updateImportFields() {
+          var episodes = importText != null && /episode/i.test(importText.split('\n')[0]) && !/channel/i.test(importText.split('\n')[0]);
+          var season = page.querySelector('#ImportMode').value === 'Season' || episodes;
+          page.querySelector('#ImportSeason').style.display = season ? '' : 'none';
+          page.querySelector('#ImportTargetField').style.display = episodes ? '' : 'none';
+        }
+
+        page.querySelector('#ImportMode').addEventListener('change', updateImportFields);
+        page.querySelector('#ImportFile').addEventListener('change', function () {
+          var file = this.files && this.files[0];
+          importText = null;
+          page.querySelector('#ImportResult').innerHTML = '';
+          if (!file) { updateImportFields(); return; }
+          var reader = new FileReader();
+          reader.onload = function () { importText = String(reader.result || ''); updateImportFields(); };
+          reader.readAsText(file);
+        });
+
+        function runImport(apply) {
+          var out = page.querySelector('#ImportResult');
+          if (importText == null) { out.innerHTML = ''; out.appendChild(el('p', { className: 'ctv-error', text: 'Choose a file first.' })); return; }
+          if (apply && !window.confirm('Import and save now? Unsaved changes on this page are lost.')) { return; }
+          out.innerHTML = '';
+          out.appendChild(el('p', { className: 'ctv-hint', text: apply ? 'Importing…' : 'Checking…' }));
+          ApiClient.fetch({
+            url: ApiClient.getUrl('CableTv/Import'),
+            type: 'POST',
+            data: JSON.stringify({
+              content: importText,
+              mode: page.querySelector('#ImportMode').value,
+              seasonName: page.querySelector('#ImportSeasonName').value,
+              from: page.querySelector('#ImportFrom').value,
+              to: page.querySelector('#ImportTo').value,
+              seasonMode: page.querySelector('#ImportSeasonMode').value,
+              targetChannelId: page.querySelector('#ImportTarget').value || null,
+              apply: apply
+            }),
+            contentType: 'application/json',
+            dataType: 'json'
+          }).then(function (r) {
+            out.innerHTML = '';
+            var total = r.matched + r.missing;
+            out.appendChild(el('p', { className: r.applied ? 'ctv-ok' : '', text: (r.applied ? 'Imported and saved. Channels are rebuilding in the background. ' : '') +
+              r.channels.length + ' channels; ' + r.matched + ' of ' + total + ' titles are in your library' + (r.missing ? ' (the rest won\'t air).' : '.') }));
+            r.warnings.slice(0, 20).forEach(function (w) { out.appendChild(el('div', { className: 'ctv-error', text: w })); });
+            if (r.warnings.length > 20) { out.appendChild(el('div', { className: 'ctv-error', text: '… ' + (r.warnings.length - 20) + ' more warnings' })); }
+            r.channels.forEach(function (c) {
+              var text = (c.action + '       ').slice(0, 8) + (c.number || '') + '  ' + c.name + (c.titles ? ' — ' + c.matched + '/' + c.titles + ' found' : '');
+              if (c.missing.length) {
+                out.appendChild(el('details', {}, [el('summary', { className: 'ctv-pre', text: text }), el('pre', { className: 'ctv-pre', text: 'Not in your library:\n' + c.missing.join('\n') })]));
+              } else {
+                out.appendChild(el('div', { className: 'ctv-pre', text: text }));
+              }
+            });
+            if (r.applied) { loadConfig(); setTimeout(loadSummary, 3000); }
+          }, function (err) {
+            out.innerHTML = '';
+            var show = function (text) { out.appendChild(el('p', { className: 'ctv-error', text: text || 'The import failed.' })); };
+            if (err && typeof err.text === 'function') { err.text().then(show, function () { show(); }); } else { show(); }
+          });
+        }
+
+        page.querySelector('#ImportCheck').addEventListener('click', function () { runImport(false); });
+        page.querySelector('#ImportApply').addEventListener('click', function () { runImport(true); });
+
+        function download(format) {
+          ApiClient.fetch({ url: ApiClient.getUrl('CableTv/Export', { format: format }), type: 'GET', dataType: 'text' }).then(function (text) {
+            var blob = new Blob([text], { type: format === 'csv' ? 'text/csv' : 'application/json' });
+            var a = el('a', { href: URL.createObjectURL(blob), download: 'cabletv-' + (format === 'csv' ? 'lineup' : 'channels') + '-' + new Date().toISOString().slice(0, 10) + '.' + format });
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+          });
+        }
+
+        page.querySelector('#ExportJson').addEventListener('click', function () { download('json'); });
+        page.querySelector('#ExportCsv').addEventListener('click', function () { download('csv'); });
+
         page.querySelector('#CableTvConfigForm').addEventListener('submit', function (e) {
           e.preventDefault();
           var errorBox = page.querySelector('#SaveError');
@@ -580,6 +878,7 @@
             config.FallbackMode = page.querySelector('#FallbackMode').value;
             config.TranscodeHeight = parseInt(page.querySelector('#TranscodeHeight').value, 10) || 720;
             config.NormalizeLoudness = page.querySelector('#NormalizeLoudness').checked;
+            config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
             config.CommercialSources = state.config.CommercialSources;
             config.Channels = state.config.Channels;
             ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {

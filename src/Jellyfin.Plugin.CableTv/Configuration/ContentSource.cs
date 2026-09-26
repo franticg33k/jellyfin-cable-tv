@@ -35,4 +35,10 @@ public class ContentSource
     /// then. Empty for any time. An item also in an unrestricted source is not restricted.
     /// </summary>
     public string? AirHours { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this source removes its items from the channel instead of adding them,
+    /// for example Comedy minus Animation.
+    /// </summary>
+    public bool Exclude { get; set; }
 }
