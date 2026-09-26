@@ -39,6 +39,11 @@ public class ChannelDefinition
     public ChannelSorting Sorting { get; set; } = ChannelSorting.Random;
 
     /// <summary>
+    /// Gets or sets the number of consecutive episodes per series for <see cref="ChannelSorting.Block"/>.
+    /// </summary>
+    public int BlockSize { get; set; } = 3;
+
+    /// <summary>
     /// Gets or sets the item kinds admitted to the pool: Episode, Movie, MusicVideo, Video.
     /// </summary>
     [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
@@ -59,4 +64,30 @@ public class ChannelDefinition
     /// Gets or sets an optional per-channel schedule anchor; the global anchor is used when unset.
     /// </summary>
     public DateTime? AnchorUtc { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether commercial breaks are planned.
+    /// </summary>
+    public bool CommercialsEnabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the grid in minutes each programme block is padded to (for example 30). 0 disables fill-to-grid.
+    /// </summary>
+    public int GridMinutes { get; set; }
+
+    /// <summary>
+    /// Gets or sets where programmes are split for a break.
+    /// </summary>
+    public MidBreakMode MidBreak { get; set; } = MidBreakMode.None;
+
+    /// <summary>
+    /// Gets or sets the length of each break in seconds when fill-to-grid is off.
+    /// </summary>
+    public int BreakSeconds { get; set; } = 120;
+
+    /// <summary>
+    /// Gets or sets the commercial sources for this channel; the global commercial sources are used when empty.
+    /// </summary>
+    [SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "XML-serialized configuration.")]
+    public ContentSource[] CommercialSources { get; set; } = [];
 }
