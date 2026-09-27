@@ -25,6 +25,7 @@ public sealed record ChannelListResponse(
 /// <param name="PoolSize">Number of schedulable items; zero means the channel shows nothing.</param>
 /// <param name="Category">Guide group, e.g. "Kids"; omitted when not set.</param>
 /// <param name="Kind">"stream" or "weather" for those channels; omitted for library channels.</param>
+/// <param name="LiveTvId">Jellyfin's Live TV channel item id, for playing the Live TV stream; omitted until the guide has run.</param>
 public sealed record ChannelDto(
     [property: JsonPropertyName("channelId")] string ChannelId,
     [property: JsonPropertyName("number")] string Number,
@@ -33,7 +34,8 @@ public sealed record ChannelDto(
     [property: JsonPropertyName("scheduleVersion")] string ScheduleVersion,
     [property: JsonPropertyName("poolSize")] int PoolSize,
     [property: JsonPropertyName("category")] string? Category = null,
-    [property: JsonPropertyName("kind")] string? Kind = null);
+    [property: JsonPropertyName("kind")] string? Kind = null,
+    [property: JsonPropertyName("liveTvId")] string? LiveTvId = null);
 
 /// <summary>Response of <c>GET /CableTv/Schedule</c>.</summary>
 /// <param name="ServerTime">Server clock when the response was built.</param>

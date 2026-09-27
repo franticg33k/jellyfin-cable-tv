@@ -53,7 +53,10 @@ public class CableTvLiveTvService : ILiveTvService
 
     /// <inheritdoc />
     /// <remarks>Jellyfin keys channels and programmes by this name, so it is fixed rather than configurable.</remarks>
-    public string Name => "Cable TV";
+    public string Name => ServiceName;
+
+    /// <summary>Gets the service name Jellyfin stores on this plugin's Live TV channels.</summary>
+    public static string ServiceName => "Cable TV";
 
     /// <inheritdoc />
     public string HomePageUrl => "https://github.com/franticg33k/jellyfin-cable-tv";

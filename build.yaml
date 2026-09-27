@@ -1,7 +1,7 @@
 # Plugin manifest for jprm (Jellyfin plugin repository manager).
 name: "Cable TV"
 guid: "ddef6196-173c-4477-b5e8-72811d8d96e4"
-version: "0.5.2.0"
+version: "0.5.3.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 overview: "Scheduled, always-on channels built from your library"
@@ -14,6 +14,9 @@ owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
+  0.5.3.0: web TV plays each channel's Live TV stream, the same one Jellyfin's Live TV player uses, instead of
+  transcoding the scheduled files itself, which failed for some files; the channel list returns each channel's
+  Live TV id (liveTvId).
   0.5.2.0: web TV video plays: it joins programmes by seeking in the player, since Jellyfin 12 rejects a start
   offset on HLS segments, and the page is no longer cached across updates. Live TV clients that remux to HLS
   (live.m3u8, e.g. Fathom) play Cable TV channels: copied video and its audio start at the same keyframe, so
