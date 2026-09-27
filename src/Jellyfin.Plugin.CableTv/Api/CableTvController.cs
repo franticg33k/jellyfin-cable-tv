@@ -404,7 +404,12 @@ public class CableTvController : ControllerBase
     [HttpGet("Web")]
     [AllowAnonymous]
     [ApiExplorerSettings(IgnoreApi = true)]
-    public ActionResult GetWebTv() => Resource("tv.html", "text/html; charset=utf-8");
+    public ActionResult GetWebTv()
+    {
+        // Revalidate every time, so a plugin update reaches browsers straight away.
+        Response.Headers.CacheControl = "no-cache";
+        return Resource("tv.html", "text/html; charset=utf-8");
+    }
 
     /// <summary>
     /// hls.js for the web TV mode (Apache-2.0).

@@ -286,8 +286,9 @@ public class CableTvLiveTvService : ILiveTvService
             RequiresClosing = true,
 
             // Without this Jellyfin's ffmpeg analyses 200 s of input before it starts, which on a live source means
-            // waiting 200 s. The stream's format is declared below, so a short look is enough.
-            AnalyzeDurationMs = 2000,
+            // waiting 200 s. Probing stops once both streams are seen, so this is only an upper bound; it leaves room
+            // for sources whose first audio arrives a few seconds in.
+            AnalyzeDurationMs = 5000,
             MediaStreams =
             [
                 new MediaStream

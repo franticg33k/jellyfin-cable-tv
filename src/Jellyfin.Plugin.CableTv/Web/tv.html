@@ -146,10 +146,13 @@
     card(channels[current], 'NO SIGNAL', detail + ' Trying again shortly.');
     retryTimer = setTimeout(function () { tune(current); }, 10000);
   }
-  function playUrl(url) {
+  // startSec: where to join the programme. HLS playlists always cover the whole item (Jellyfin rejects a start
+  // offset on segment requests), so the player seeks there instead.
+  function playUrl(url, startSec) {
     stop();
+    startSec = startSec || 0;
     if (url.indexOf('.m3u8') >= 0 && !video.canPlayType('application/vnd.apple.mpegurl') && window.Hls && Hls.isSupported()) {
-      hls = new Hls({ maxBufferLength: 20 });
+      hls = new Hls({ maxBufferLength: 20, startPosition: startSec });
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (!data.fatal) return;
         var status = data.response && data.response.code;
@@ -158,12 +161,14 @@
       hls.loadSource(url); hls.attachMedia(video);
     } else {
       video.src = url;
+      if (startSec > 0) video.addEventListener('loadedmetadata', function seek() { video.removeEventListener('loadedmetadata', seek); video.currentTime = startSec; });
     }
     startPlayback();
   }
   function mediaUrl(slot, offsetMs) {
-    var q = 'ApiKey=' + encodeURIComponent(token) + '&DeviceId=cabletv-web&PlaySessionId=' + Math.random().toString(36).slice(2) + '&StartTimeTicks=' + Math.max(0, Math.floor(offsetMs * 10000));
-    if (slot.audio) return base + '/Audio/' + slot.itemId + '/universal?UserId=' + userId + '&Container=mp3,aac,m4a,flac,ogg&TranscodingContainer=mp3&AudioCodec=mp3&' + q;
+    var q = 'ApiKey=' + encodeURIComponent(token) + '&DeviceId=cabletv-web&PlaySessionId=' + Math.random().toString(36).slice(2);
+    // Audio streams take the start offset; HLS video seeks in the player (see playUrl).
+    if (slot.audio) return base + '/Audio/' + slot.itemId + '/universal?UserId=' + userId + '&Container=mp3,aac,m4a,flac,ogg&TranscodingContainer=mp3&AudioCodec=mp3&StartTimeTicks=' + Math.max(0, Math.floor(offsetMs * 10000)) + '&' + q;
     return base + '/Videos/' + slot.itemId + '/master.m3u8?MediaSourceId=' + (slot.mediaSourceId || slot.itemId) + '&VideoCodec=h264&AudioCodec=aac&TranscodingMaxAudioChannels=2&SegmentContainer=ts&' + q;
   }
   function card(channel, title, sub) {
@@ -183,7 +188,7 @@
       if (channel.kind === 'weather') { setStatic(false); card(channel, 'LOCAL FORECAST', 'The weather channel is drawn in the Cable TV app on your TV.'); }
       else if (slot.kind === 'stream' && slot.url) { setStatic(false); playUrl(slot.url); }
       else if (slot.itemId) {
-        playUrl(mediaUrl(slot, r.offsetMs));
+        playUrl(mediaUrl(slot, r.offsetMs), slot.audio ? 0 : r.offsetMs / 1000);
         if (slot.audio) card(channel, slot.title, [slot.artist, slot.album].filter(Boolean).join(' · '));
       } else { card(channel, 'UP NEXT', next[0] ? next[0].title + ' at ' + time(Date.parse(next[0].start)) : ''); setStatic(false); }
       showBanner();
