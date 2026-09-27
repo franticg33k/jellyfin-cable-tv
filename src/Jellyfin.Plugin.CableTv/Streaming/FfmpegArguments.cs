@@ -60,6 +60,7 @@ public static class FfmpegArguments
         var length = Seconds(duration.TotalSeconds);
         bool copy;
         string audioMap;
+        SubtitleTrack? subtitle = null;
         var videoMap = "0:v:0";
         if (item is { IsAudio: true, Path: not null })
         {
@@ -99,7 +100,8 @@ public static class FfmpegArguments
         }
         else
         {
-            copy = profile.CanCopy(item);
+            subtitle = profile.BurnSubtitles ? SubtitleTrack.Pick(item.Subtitles, profile.SubtitleLanguage) : null;
+            copy = subtitle is null && profile.CanCopy(item);
             args.AddRange(pace);
             if (startInItem > TimeSpan.Zero)
             {
@@ -132,7 +134,18 @@ public static class FfmpegArguments
             }
         }
 
-        args.AddRange(["-map", videoMap, "-map", audioMap, "-sn", "-dn"]);
+        var fit = FormattableString.Invariant(
+            $"scale={profile.Width}:{profile.Height}:force_original_aspect_ratio=decrease,pad={profile.Width}:{profile.Height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p");
+        if (subtitle is { IsText: false })
+        {
+            // Image subtitles (Blu-ray, DVD, DVB) are overlaid at the source's size, then the result is scaled.
+            args.AddRange(["-filter_complex", FormattableString.Invariant($"[{videoMap}][0:s:{subtitle.EmbeddedIndex}]overlay=(W-w)/2:(H-h)/2,{fit}[v]")]);
+            args.AddRange(["-map", "[v]", "-map", audioMap, "-sn", "-dn"]);
+        }
+        else
+        {
+            args.AddRange(["-map", videoMap, "-map", audioMap, "-sn", "-dn"]);
+        }
 
         if (copy)
         {
@@ -140,8 +153,20 @@ public static class FfmpegArguments
         }
         else
         {
-            args.AddRange(["-vf", FormattableString.Invariant(
-                $"scale={profile.Width}:{profile.Height}:force_original_aspect_ratio=decrease,pad={profile.Width}:{profile.Height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p")]);
+            if (subtitle is { IsText: true })
+            {
+                // Text subtitles are drawn by libass at the source's size (sharper), before scaling. -copyts keeps the
+                // frames on the file's own clock, so the subtitle times line up after a seek.
+                var source = subtitle.IsExternal
+                    ? FilterPath(subtitle.Path!)
+                    : FormattableString.Invariant($"{FilterPath(item!.Path!)}:si={subtitle.EmbeddedIndex}");
+                args.AddRange(["-vf", "subtitles=filename=" + source + "," + fit]);
+            }
+            else if (subtitle is null)
+            {
+                args.AddRange(["-vf", fit]);
+            }
+
             if (profile.VideoCodec == "hevc")
             {
                 args.AddRange(["-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error"]);
@@ -164,6 +189,18 @@ public static class FfmpegArguments
         args.AddRange(["-output_ts_offset", Seconds((TimestampBase + streamPosition - startsAt).TotalSeconds)]);
         args.AddRange(["-f", "mpegts", "pipe:1"]);
         return args;
+    }
+
+    /// <summary>
+    /// Quotes a file path for use as a filter option value: forward slashes, escaped drive colons, and single quotes
+    /// closed, escaped and reopened.
+    /// </summary>
+    /// <param name="path">File path.</param>
+    /// <returns>The quoted value.</returns>
+    internal static string FilterPath(string path)
+    {
+        var value = path.Replace('\\', '/').Replace(":", "\\:", StringComparison.Ordinal).Replace("'", "'\\\\\\''", StringComparison.Ordinal);
+        return "'" + value + "'";
     }
 
     /// <summary>

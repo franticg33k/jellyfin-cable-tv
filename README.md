@@ -155,6 +155,10 @@ The JSON form of a channel, for reference:
 - *Auto* (default) copies video from items in the channel's main codec and resolution and transcodes the rest.
 - *Copy* never transcodes video. *Transcode* always makes H.264 at the chosen height.
 - Audio is always converted to AAC stereo, optionally with loudness levelling.
+- **Burn in subtitles** (off by default) draws the preferred-language subtitle track into the picture, so Live TV
+  clients and the web TV page show subtitles. It works with text subtitles (SRT, ASS, WebVTT; embedded or external)
+  and image subtitles (PGS, DVD, DVB). Programmes with a matching track are transcoded, so it costs CPU. Each channel
+  can follow the setting, turn it off, or turn it on. The Cable TV app on your TV shows subtitles itself.
 - The **Prepare Cable TV commercials** scheduled task converts commercials once to each channel's stream format, so
   breaks are copied instead of transcoded. Until it has run, Auto mode transcodes mismatched ads on the fly.
 

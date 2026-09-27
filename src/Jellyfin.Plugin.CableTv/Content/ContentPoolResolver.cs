@@ -422,10 +422,28 @@ public class ContentPoolResolver
             Width = videoStream?.Width,
             Height = videoStream?.Height,
             HasAudio = streams.Any(s => s.Type == MediaStreamType.Audio),
+            Subtitles = SubtitleTracks(streams),
         };
     }
 
-    private PoolItem ConvertAudio(Audio audio)
+    private static SubtitleTrack[] SubtitleTracks(IReadOnlyList<MediaStream> streams)
+    {
+        var embedded = 0;
+        var tracks = new List<SubtitleTrack>();
+        foreach (var stream in streams.Where(s => s.Type == MediaStreamType.Subtitle).OrderBy(s => s.Index))
+        {
+            var external = stream.IsExternal && !string.IsNullOrEmpty(stream.Path);
+            tracks.Add(new SubtitleTrack(external ? -1 : embedded, stream.Codec, stream.Language, external ? stream.Path : null, stream.IsForced, stream.IsDefault));
+            if (!stream.IsExternal)
+            {
+                embedded++;
+            }
+        }
+
+        return tracks.ToArray();
+    }
+
+        private PoolItem ConvertAudio(Audio audio)
     {
         var album = audio.AlbumEntity;
         return new PoolItem(
