@@ -11,7 +11,7 @@ The project has two parts:
   instantly by direct-playing the original file at the right offset, with preloading and a static overlay.
 
 It's based on the feasibility study "Cable-TV Experience for Jellyfin — Plugin + Wholphin Fork Feasibility".
-The work is built from scratch; no NostalgiaTV code or assets are used.
+Inspired by NostalgiaTV, but written from scratch: none of its code or assets are used.
 
 ## Install
 
