@@ -40,6 +40,11 @@ public class ChannelDefinition
     public ChannelKind Kind { get; set; } = ChannelKind.Standard;
 
     /// <summary>
+    /// Gets or sets whether the channel's Live TV stream burns in subtitles: the global setting, off, or on.
+    /// </summary>
+    public ChannelSubtitles Subtitles { get; set; } = ChannelSubtitles.Default;
+
+    /// <summary>
     /// Gets or sets the stream URL (HLS .m3u8 or MPEG-TS) for a <see cref="ChannelKind.Stream"/> channel.
     /// </summary>
     public string? StreamUrl { get; set; }

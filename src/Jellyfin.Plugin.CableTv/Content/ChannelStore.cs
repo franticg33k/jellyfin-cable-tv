@@ -288,7 +288,16 @@ public class ChannelStore
             pool.Concat(rules.Slots.SelectMany(s => s.Pool)).Concat(rules.Seasons.SelectMany(s => s.Pool)),
             config.FallbackMode,
             config.TranscodeHeight,
-            config.NormalizeLoudness);
+            config.NormalizeLoudness) with
+        {
+            BurnSubtitles = definition.Subtitles switch
+            {
+                ChannelSubtitles.BurnIn => true,
+                ChannelSubtitles.Off => false,
+                _ => config.BurnInSubtitles,
+            },
+            SubtitleLanguage = config.SubtitleLanguage ?? string.Empty,
+        };
         return new ChannelSnapshot(definition, timeline, stream) { Commercials = commercials };
     }
 }

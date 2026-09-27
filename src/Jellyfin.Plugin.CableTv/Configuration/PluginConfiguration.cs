@@ -42,6 +42,17 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool NormalizeLoudness { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the Live TV stream burns subtitles into the picture (channels can
+    /// override it). Items with subtitles are then transcoded, which costs CPU.
+    /// </summary>
+    public bool BurnInSubtitles { get; set; }
+
+    /// <summary>
+    /// Gets or sets the subtitle language to burn in ("eng", "en", ...); empty for each item's default track.
+    /// </summary>
+    public string SubtitleLanguage { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the secret the server's own ffmpeg uses to read channel streams. Generated on first start.
     /// </summary>
     public string StreamKey { get; set; } = string.Empty;

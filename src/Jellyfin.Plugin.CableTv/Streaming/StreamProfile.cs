@@ -16,6 +16,12 @@ namespace Jellyfin.Plugin.CableTv.Streaming;
 /// <param name="NormalizeLoudness">Whether audio goes through loudnorm.</param>
 public sealed record StreamProfile(FallbackStreamMode Mode, string VideoCodec, int Width, int Height, bool NormalizeLoudness)
 {
+    /// <summary>Gets a value indicating whether items' subtitles are burned into the picture.</summary>
+    public bool BurnSubtitles { get; init; }
+
+    /// <summary>Gets the subtitle language to burn in; empty for each item's default track.</summary>
+    public string SubtitleLanguage { get; init; } = string.Empty;
+
     /// <summary>Codecs the stream can encode to.</summary>
     private static readonly string[] EncodableCodecs = ["h264", "hevc"];
 

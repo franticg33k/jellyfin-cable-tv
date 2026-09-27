@@ -79,6 +79,11 @@
             <label class="ctv-field"><span>Transcode height</span><input type="number" id="TranscodeHeight" min="240" max="2160" /></label>
             <label class="ctv-field"><span>&nbsp;</span><span><input type="checkbox" id="NormalizeLoudness" /> Level loudness</span></label>
           </div>
+          <div class="ctv-row">
+            <label class="ctv-field"><span>&nbsp;</span><span><input type="checkbox" id="BurnInSubtitles" /> Burn in subtitles</span></label>
+            <label class="ctv-field"><span>Subtitle language (eng, spa, ... or empty for each file's default)</span><input type="text" id="SubtitleLanguage" placeholder="eng" /></label>
+          </div>
+          <p class="ctv-hint">Burned-in subtitles show in every Live TV client and the web TV page. Programmes with a matching subtitle track are transcoded, which costs CPU. Channels can override this. The Cable TV app on your TV shows subtitles itself and doesn't need it.</p>
 
           <h3 class="sectionTitle">Content groups</h3>
           <p class="ctv-hint">Named sets of sources that several channels can share: add a <em>Content group</em> source to a channel to include one. Changing a group changes every channel that uses it.</p>
@@ -369,6 +374,7 @@
         // ---- channel editor ----
         function normalize(channel) {
           channel.Kind = channel.Kind || 'Standard';
+          channel.Subtitles = channel.Subtitles || 'Default';
           channel.Sources = channel.Sources || [];
           channel.CommercialSources = channel.CommercialSources || [];
           channel.TimeSlots = channel.TimeSlots || [];
@@ -451,6 +457,9 @@
           } else if (channel.Kind === 'Weather') {
             kindRow.appendChild(field('Place (city name, or latitude,longitude)', textInput(channel, 'WeatherLocation', 'Chicago'), true));
             kindRow.appendChild(checkbox(channel, 'WeatherMetric', 'Metric units (°C, km/h)'));
+          }
+          if (channel.Kind === 'Standard') {
+            kindRow.appendChild(field('Subtitles in the Live TV stream', select(channel, 'Subtitles', [['Default', 'Server setting'], ['Off', 'Off'], ['BurnIn', 'Burn in']])));
           }
           kindCard.appendChild(kindRow);
           if (channel.Kind === 'Weather') {
@@ -651,6 +660,8 @@
             page.querySelector('#FallbackMode').value = config.FallbackMode || 'Auto';
             page.querySelector('#TranscodeHeight').value = config.TranscodeHeight || 720;
             page.querySelector('#NormalizeLoudness').checked = config.NormalizeLoudness !== false;
+            page.querySelector('#BurnInSubtitles').checked = !!config.BurnInSubtitles;
+            page.querySelector('#SubtitleLanguage').value = config.SubtitleLanguage || '';
             page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
             page.querySelector('#ServiceName').value = config.ServiceName || '';
             page.querySelector('#WebTvLink').href = ApiClient.getUrl('CableTv/Web');
@@ -947,6 +958,8 @@
             config.FallbackMode = page.querySelector('#FallbackMode').value;
             config.TranscodeHeight = parseInt(page.querySelector('#TranscodeHeight').value, 10) || 720;
             config.NormalizeLoudness = page.querySelector('#NormalizeLoudness').checked;
+            config.BurnInSubtitles = page.querySelector('#BurnInSubtitles').checked;
+            config.SubtitleLanguage = page.querySelector('#SubtitleLanguage').value.trim();
             config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
             config.ServiceName = page.querySelector('#ServiceName').value.trim() || 'Cable TV';
             config.ContentGroups = state.config.ContentGroups;

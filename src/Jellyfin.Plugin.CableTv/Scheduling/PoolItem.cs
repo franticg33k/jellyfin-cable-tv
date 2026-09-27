@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Jellyfin.Plugin.CableTv.Scheduling;
 
@@ -64,6 +65,9 @@ public sealed record PoolItem(Guid ItemId, string MediaSourceId, long DurationTi
 
     /// <summary>Gets a value indicating whether the item has an audio stream.</summary>
     public bool HasAudio { get; init; } = true;
+
+    /// <summary>Gets the item's subtitle tracks, for burning into the Live TV stream.</summary>
+    public IReadOnlyList<SubtitleTrack> Subtitles { get; init; } = [];
 
     /// <summary>Gets a value indicating whether the item is music (no video of its own).</summary>
     public bool IsAudio { get; init; }
