@@ -36,7 +36,7 @@ a new folder `<jellyfin config>/plugins/Cable TV_<version>/` (Docker: `/config/p
 
 ## Set up channels
 
-Open **Dashboard → Plugins → Cable TV**. The page is a form:
+Open **Cable TV** in the dashboard sidebar (under Plugins), or **Dashboard → Plugins → Cable TV**. The page is a form:
 
 - **General**: the service name shown in guides and on the web TV page (default "Cable TV"), and the time zone
   that time slots, restricted hours, seasons and premieres use.
