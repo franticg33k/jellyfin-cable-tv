@@ -122,19 +122,47 @@
   }
 
   // ---- playback ----
-  function stop() { if (hls) { hls.destroy(); hls = null; } video.removeAttribute('src'); video.load(); }
+  var blocked = false, retryTimer = null;
+  function stop() { clearTimeout(retryTimer); if (hls) { hls.destroy(); hls = null; } video.removeAttribute('src'); video.load(); }
+  // Browsers only start sound after the user has interacted with the page (a reload with a saved sign-in hasn't).
+  function startPlayback() {
+    video.play().then(function () { blocked = false; }).catch(function (e) {
+      if (e && e.name === 'NotAllowedError') {
+        blocked = true; setStatic(false);
+        card(channels[current], 'PRESS ANY KEY TO TUNE IN', 'Your browser starts video once you click or press a key.');
+      }
+    });
+  }
+  function resume() {
+    if (!blocked) return false;
+    blocked = false;
+    if (now && now.audio) card(channels[current], now.title, [now.artist, now.album].filter(Boolean).join(' · '));
+    else show($('card'), false);
+    startPlayback();
+    return true;
+  }
+  function noSignal(detail) {
+    stop(); setStatic(false);
+    card(channels[current], 'NO SIGNAL', detail + ' Trying again shortly.');
+    retryTimer = setTimeout(function () { tune(current); }, 10000);
+  }
   function playUrl(url) {
     stop();
     if (url.indexOf('.m3u8') >= 0 && !video.canPlayType('application/vnd.apple.mpegurl') && window.Hls && Hls.isSupported()) {
       hls = new Hls({ maxBufferLength: 20 });
+      hls.on(Hls.Events.ERROR, function (event, data) {
+        if (!data.fatal) return;
+        var status = data.response && data.response.code;
+        noSignal(status === 401 || status === 403 ? 'The server refused the stream (sign in again if this persists).' : 'The stream could not be played.');
+      });
       hls.loadSource(url); hls.attachMedia(video);
     } else {
       video.src = url;
     }
-    video.play().catch(function () { /* autoplay needs a click first */ });
+    startPlayback();
   }
   function mediaUrl(slot, offsetMs) {
-    var q = 'api_key=' + encodeURIComponent(token) + '&DeviceId=cabletv-web&PlaySessionId=' + Math.random().toString(36).slice(2) + '&StartTimeTicks=' + Math.max(0, Math.floor(offsetMs * 10000));
+    var q = 'ApiKey=' + encodeURIComponent(token) + '&DeviceId=cabletv-web&PlaySessionId=' + Math.random().toString(36).slice(2) + '&StartTimeTicks=' + Math.max(0, Math.floor(offsetMs * 10000));
     if (slot.audio) return base + '/Audio/' + slot.itemId + '/universal?UserId=' + userId + '&Container=mp3,aac,m4a,flac,ogg&TranscodingContainer=mp3&AudioCodec=mp3&' + q;
     return base + '/Videos/' + slot.itemId + '/master.m3u8?MediaSourceId=' + (slot.mediaSourceId || slot.itemId) + '&VideoCodec=h264&AudioCodec=aac&TranscodingMaxAudioChannels=2&SegmentContainer=ts&' + q;
   }
@@ -164,7 +192,7 @@
   video.addEventListener('playing', function () { setStatic(false); });
   video.addEventListener('waiting', function () { setStatic(true); });
   video.addEventListener('ended', function () { tune(current); });
-  video.addEventListener('error', function () { setTimeout(function () { tune(current); }, 3000); });
+  video.addEventListener('error', function () { if (!hls) noSignal('The stream could not be played.'); });
   // Rejoin the schedule at each slot boundary (breaks, next programme).
   setInterval(function () { if (now && nowMs() >= Date.parse(now.end) && $('guide').style.display !== 'flex') tune(current); }, 1000);
 
@@ -249,6 +277,8 @@
     if (i >= 0) tune(i);
   }
   document.addEventListener('keydown', function (e) {
+    if (!token || /^(INPUT|TEXTAREA|BUTTON)$/.test(e.target.tagName)) return; // typing in the sign-in form
+    if (resume()) { e.preventDefault(); return; }
     var guideOpen = $('guide').style.display === 'flex';
     if (/^[0-9]$/.test(e.key) && !guideOpen) {
       digits += e.key; $('digits').textContent = digits; show($('digits'), true);
@@ -277,7 +307,7 @@
     }
     e.preventDefault();
   });
-  document.addEventListener('click', function (e) { if (e.target === video || e.target.id === 'card') { video.play().catch(function () {}); showBanner(); } });
+  document.addEventListener('click', function (e) { if (resume()) return; if (e.target === video || e.target.id === 'card') { video.play().catch(function () {}); showBanner(); } });
   setInterval(function () { $('clock').textContent = time(nowMs()); }, 1000);
 
   // ---- start ----
