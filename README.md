@@ -1,3 +1,5 @@
+<p align="center"><img src="images/logo.png" alt="Cable TV" width="160"></p>
+
 # Jellyfin Cable TV
 
 Cable-style, always-on channels for Jellyfin, built from your own library.
@@ -224,7 +226,7 @@ tests/            xUnit tests
 docs/             API contract
 scripts/          Packaging
 dist/             Plugin repository manifest (zips are attached to GitHub releases)
-images/           Catalog image
+images/           Catalog image and logo (PNG, with SVG sources)
 dev/              Local Jellyfin 12 test server
 ```
 
