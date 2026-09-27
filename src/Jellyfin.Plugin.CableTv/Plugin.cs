@@ -53,6 +53,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             {
                 Name = Name,
                 EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace),
+
+                // Listed in the dashboard's sidebar, next to the other plugins' pages.
+                EnableInMainMenu = true,
+                DisplayName = "Cable TV",
+                MenuIcon = "live_tv",
             },
         ];
     }
