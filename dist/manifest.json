@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/images/icon.png",
     "versions": [
       {
+        "version": "0.5.1.0",
+        "changelog": "0.5.1.0: web TV fixes: video plays on Jellyfin 12 (the stream key is sent the way it now expects), a \"press any key to tune in\" prompt when the browser blocks autoplay, a no-signal card with retries instead of endless static, and Enter signs in. 0.5.0.0: stream (HLS/URL), weather and music channels; trailer channels (\"Coming attractions\") and trailer sources; artist sources and music suggestions; content groups; a browser TV page at /CableTv/Web; commercials pre-converted by a scheduled task; a configurable service name; the guide folds songs and trailers into blocks. 0.4.1.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint, channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag. 0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/franticg33k/jellyfin-cable-tv/releases/download/v0.5.1.0/cabletv_0.5.1.0.zip",
+        "checksum": "d1952c31519e67200f996ce4219d9789",
+        "timestamp": "2026-09-27T04:34:47Z"
+      },
+      {
         "version": "0.5.0.0",
         "changelog": "0.5.0.0: stream (HLS/URL), weather and music channels; trailer channels (\"Coming attractions\") and trailer sources; artist sources and music suggestions; content groups; a browser TV page at /CableTv/Web; commercials pre-converted by a scheduled task; a configurable service name; the guide folds songs and trailers into blocks. 0.4.1.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint, channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag. 0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.",
         "targetAbi": "12.0.0.0",
