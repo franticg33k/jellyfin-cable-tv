@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Build the installable plugin zip and a Jellyfin plugin repository manifest.
 
-    python3 scripts/package.py [--base-url URL]
+    python3 scripts/package.py [--base-url URL] [--merge]
 
 Writes dist/cabletv_<version>.zip (the DLL plus meta.json, ready to unzip into
 <jellyfin config>/plugins/) and dist/manifest.json, a plugin repository manifest whose
-download link is <base-url>/cabletv_<version>.zip.
+download link is <base-url>/cabletv_<version>.zip. The default base URL is this version's
+GitHub release, where the Publish workflow uploads the zip. With --merge, versions already
+listed in dist/manifest.json are kept (newest first), so servers can still see older builds.
 """
 import argparse
 import datetime
@@ -19,7 +21,9 @@ import zipfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PROJECT = ROOT / "src" / "Jellyfin.Plugin.CableTv"
 DIST = ROOT / "dist"
-DEFAULT_BASE_URL = "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist"
+REPOSITORY = "https://github.com/franticg33k/jellyfin-cable-tv"
+DEFAULT_BASE_URL = REPOSITORY + "/releases/download/v{version}"
+IMAGE_URL = "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/images/icon.png"
 
 
 def build_yaml():
@@ -37,7 +41,9 @@ def build_yaml():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="where the zip will be downloadable from")
+    parser.add_argument("--base-url", default=DEFAULT_BASE_URL,
+                        help="where the zip will be downloadable from; {version} is replaced")
+    parser.add_argument("--merge", action="store_true", help="keep the other versions already in dist/manifest.json")
     args = parser.parse_args()
 
     meta = build_yaml()
@@ -76,6 +82,22 @@ def main():
         archive.writestr("meta.json", json.dumps(plugin_meta, indent=2))
 
     checksum = hashlib.md5(zip_path.read_bytes()).hexdigest()
+    base_url = args.base_url.replace("{version}", version).rstrip("/")
+    entry = {
+        "version": version,
+        "changelog": meta["changelog"],
+        "targetAbi": meta["targetAbi"],
+        "sourceUrl": f"{base_url}/{zip_name}",
+        "checksum": checksum,
+        "timestamp": timestamp,
+    }
+    versions = [entry]
+    manifest_path = DIST / "manifest.json"
+    if args.merge and manifest_path.exists():
+        for plugin in json.loads(manifest_path.read_text()):
+            if plugin.get("guid") == meta["guid"]:
+                versions += [v for v in plugin.get("versions", []) if v.get("version") != version]
+    versions.sort(key=lambda v: tuple(int(p) for p in v["version"].split(".")), reverse=True)
     manifest = [{
         "guid": meta["guid"],
         "name": meta["name"],
@@ -83,17 +105,10 @@ def main():
         "overview": meta["overview"],
         "owner": meta["owner"],
         "category": meta["category"],
-        "imageUrl": "",
-        "versions": [{
-            "version": version,
-            "changelog": meta["changelog"],
-            "targetAbi": meta["targetAbi"],
-            "sourceUrl": f"{args.base_url.rstrip('/')}/{zip_name}",
-            "checksum": checksum,
-            "timestamp": timestamp,
-        }],
+        "imageUrl": IMAGE_URL,
+        "versions": versions,
     }]
-    (DIST / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"{zip_path.relative_to(ROOT)}  md5 {checksum}")
 
 
