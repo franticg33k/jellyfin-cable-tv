@@ -15,23 +15,22 @@ The work is built from scratch; no NostalgiaTV code or assets are used.
 
 ## Install
 
-Requires **Jellyfin 12.x**. The installable package is [`dist/cabletv_0.5.0.0.zip`](dist/).
+Requires **Jellyfin 12.x**.
 
-**Option A: drop it in (works today).**
+**From your server's dashboard (recommended; you also get updates).**
 
-1. Stop Jellyfin.
-2. Unzip `cabletv_0.5.0.0.zip` into a new folder `<jellyfin config>/plugins/Cable TV_0.5.0.0/`
-   (Docker: `/config/plugins/…`; Linux packages: `/var/lib/jellyfin/plugins/…`;
-   Windows: `%ProgramData%\Jellyfin\Server\plugins\…`).
-3. Start Jellyfin. **Dashboard → Plugins** lists *Cable TV 0.5.0.0*.
+1. **Dashboard → Plugins → Repositories → +**, name it *Cable TV*, and enter
+   ```
+   https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/manifest.json
+   ```
+2. **Dashboard → Plugins → Catalog**: *Cable TV* is under *Live TV*. Install it and restart Jellyfin.
+3. New versions show up in the catalog and install the same way (or on their own when automatic plugin
+   updates are on).
 
-**Option B: plugin repository (installs and updates from the dashboard).**
-
-Add the manifest URL under **Dashboard → Plugins → Repositories**, then install *Cable TV* from the catalog and
-restart. The manifest in `dist/manifest.json` points at
-`https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/`, so it works once this repository is
-public and the files are on `main`. For a private repository, host `dist/` anywhere your server can reach and
-rebuild the manifest with `python3 scripts/package.py --base-url <that URL>`.
+**By hand.** Download `cabletv_<version>.zip` from the
+[latest release](https://github.com/franticg33k/jellyfin-cable-tv/releases/latest), stop Jellyfin, unzip it into
+a new folder `<jellyfin config>/plugins/Cable TV_<version>/` (Docker: `/config/plugins/…`; Linux packages:
+`/var/lib/jellyfin/plugins/…`; Windows: `%ProgramData%\Jellyfin\Server\plugins\…`) and start Jellyfin.
 
 ## Set up channels
 
@@ -201,7 +200,9 @@ dotnet test
 python3 scripts/package.py            # writes dist/cabletv_<version>.zip and dist/manifest.json
 ```
 
-Pushing a tag like `v0.2.0.0` runs the release workflow, which attaches the zip to a GitHub release.
+To release, bump `version` (and the changelog) in `build.yaml` and merge to `main`. The *Publish* workflow then
+tests, uploads the zip to a `v<version>` GitHub release and adds the version to `dist/manifest.json`, the plugin
+repository servers read. It can also be run from the Actions tab; a version that's already released is skipped.
 
 ## Layout
 
@@ -222,7 +223,8 @@ src/Jellyfin.Plugin.CableTv/
 tests/            xUnit tests
 docs/             API contract
 scripts/          Packaging
-dist/             Installable zip and repository manifest
+dist/             Plugin repository manifest (zips are attached to GitHub releases)
+images/           Catalog image
 dev/              Local Jellyfin 12 test server
 ```
 
