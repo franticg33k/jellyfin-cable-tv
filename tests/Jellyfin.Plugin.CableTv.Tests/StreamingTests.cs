@@ -75,6 +75,21 @@ public class StreamingTests
     }
 
     [Fact]
+    public void CopiedVideo_JoinedMidway_StartsAudioAtTheSameKeyframe()
+    {
+        var profile = new StreamProfile(FallbackStreamMode.Auto, "h264", 1280, 720, true);
+
+        var copied = FfmpegArguments.Build(Slot(Item("h264", 1280, 720)), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15), TimeSpan.Zero, profile).ToList();
+        var encoded = FfmpegArguments.Build(Slot(Item("hevc", 1920, 1080)), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15), TimeSpan.Zero, profile).ToList();
+        var fromStart = FfmpegArguments.Build(Slot(Item("h264", 1280, 720)), TimeSpan.Zero, TimeSpan.FromMinutes(15), TimeSpan.Zero, profile);
+
+        // Without it the stream opens with seconds of video and no audio, and Jellyfin can't remux it to HLS.
+        Assert.True(copied.IndexOf("-noaccurate_seek") >= 0 && copied.IndexOf("-noaccurate_seek") < copied.IndexOf("-i"));
+        Assert.DoesNotContain("-noaccurate_seek", encoded);
+        Assert.DoesNotContain("-noaccurate_seek", fromStart);
+    }
+
+    [Fact]
     public void AudioIsAlwaysReencodedAndLevelled()
     {
         var profile = new StreamProfile(FallbackStreamMode.Copy, "h264", 1280, 720, true);

@@ -103,6 +103,14 @@ public static class FfmpegArguments
             args.AddRange(pace);
             if (startInItem > TimeSpan.Zero)
             {
+                if (copy)
+                {
+                    // Copied video starts at the keyframe before the seek point. Start the re-encoded audio there
+                    // too: otherwise the stream opens with seconds of video and no audio, and Jellyfin's probe
+                    // reports an audio track with no sample rate, which breaks remuxing to HLS (live.m3u8).
+                    args.Add("-noaccurate_seek");
+                }
+
                 args.AddRange(["-ss", Seconds(startInItem.TotalSeconds)]);
             }
 

@@ -14,7 +14,8 @@ owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
-  0.5.1.0: web TV fixes: video plays on Jellyfin 12 (the stream key is sent the way it now expects), a "press any
+  0.5.1.0: Live TV clients that remux to HLS (live.m3u8, e.g. Fathom) play Cable TV channels: copied video and its
+  audio now start at the same keyframe, so Jellyfin sees the audio track. Web TV fixes: video plays on Jellyfin 12 (the stream key is sent the way it now expects), a "press any
   key to tune in" prompt when the browser blocks autoplay, a no-signal card with retries instead of endless static,
   and Enter signs in.
   0.5.0.0: stream (HLS/URL), weather and music channels; trailer channels ("Coming attractions") and trailer
