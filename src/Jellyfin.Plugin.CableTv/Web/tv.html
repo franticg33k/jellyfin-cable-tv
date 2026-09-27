@@ -135,24 +135,18 @@
   }
   function resume() {
     if (!blocked) return false;
-    blocked = false;
-    if (now && now.audio) card(channels[current], now.title, [now.artist, now.album].filter(Boolean).join(' · '));
-    else show($('card'), false);
-    startPlayback();
+    blocked = false; show($('card'), false); startPlayback();
     return true;
   }
   function noSignal(detail) {
-    stop(); setStatic(false);
+    stop(); closeLive(); setStatic(false);
     card(channels[current], 'NO SIGNAL', detail + ' Trying again shortly.');
     retryTimer = setTimeout(function () { tune(current); }, 10000);
   }
-  // startSec: where to join the programme. HLS playlists always cover the whole item (Jellyfin rejects a start
-  // offset on segment requests), so the player seeks there instead.
-  function playUrl(url, startSec) {
+  function playUrl(url) {
     stop();
-    startSec = startSec || 0;
     if (url.indexOf('.m3u8') >= 0 && !video.canPlayType('application/vnd.apple.mpegurl') && window.Hls && Hls.isSupported()) {
-      hls = new Hls({ maxBufferLength: 20, startPosition: startSec });
+      hls = new Hls({ maxBufferLength: 20 });
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (!data.fatal) return;
         var status = data.response && data.response.code;
@@ -161,15 +155,8 @@
       hls.loadSource(url); hls.attachMedia(video);
     } else {
       video.src = url;
-      if (startSec > 0) video.addEventListener('loadedmetadata', function seek() { video.removeEventListener('loadedmetadata', seek); video.currentTime = startSec; });
     }
     startPlayback();
-  }
-  function mediaUrl(slot, offsetMs) {
-    var q = 'ApiKey=' + encodeURIComponent(token) + '&DeviceId=cabletv-web&PlaySessionId=' + Math.random().toString(36).slice(2);
-    // Audio streams take the start offset; HLS video seeks in the player (see playUrl).
-    if (slot.audio) return base + '/Audio/' + slot.itemId + '/universal?UserId=' + userId + '&Container=mp3,aac,m4a,flac,ogg&TranscodingContainer=mp3&AudioCodec=mp3&StartTimeTicks=' + Math.max(0, Math.floor(offsetMs * 10000)) + '&' + q;
-    return base + '/Videos/' + slot.itemId + '/master.m3u8?MediaSourceId=' + (slot.mediaSourceId || slot.itemId) + '&VideoCodec=h264&AudioCodec=aac&TranscodingMaxAudioChannels=2&SegmentContainer=ts&' + q;
   }
   function card(channel, title, sub) {
     $('cardLogo').innerHTML = channel && channel.logoUrl ? '<img src="' + channel.logoUrl + '" style="max-height:18vh;max-width:40vw">' : '';
@@ -177,29 +164,53 @@
     show($('card'), true, 'flex');
   }
 
+  // The page plays each channel's Live TV stream, exactly as Jellyfin's own Live TV player does: Jellyfin opens the
+  // plugin's continuous stream and hands back an HLS URL it transcodes to what the browser can play.
+  var PROFILE = {
+    MaxStreamingBitrate: 40000000,
+    DirectPlayProfiles: [],
+    TranscodingProfiles: [{ Container: 'ts', Type: 'Video', VideoCodec: 'h264', AudioCodec: 'aac', Protocol: 'hls', Context: 'Streaming', MaxAudioChannels: '2', MinSegments: 1, BreakOnNonKeyFrames: true }]
+  };
+  var liveStreamId = null, tuneSeq = 0;
+  function authHeaders() { return { Authorization: authHeader + ', Token="' + token + '"', 'Content-Type': 'application/json' }; }
+  function closeLive() {
+    if (!liveStreamId) return;
+    fetch(base + '/LiveStreams/Close?liveStreamId=' + encodeURIComponent(liveStreamId), { method: 'POST', headers: authHeaders(), keepalive: true }).catch(function () {});
+    liveStreamId = null;
+  }
+  function refreshNow(channel) {
+    return api('CableTv/Now', { channelId: channel.channelId, next: 3 }).then(function (r) {
+      if (channel !== channels[current]) return;
+      now = r.current; next = r.next; showBanner();
+    }).catch(function () { now = null; next = []; });
+  }
+
   function tune(index) {
     if (!channels.length) return;
     current = (index + channels.length) % channels.length;
-    var channel = channels[current];
-    show($('card'), false); setStatic(true); stop();
-    api('CableTv/Now', { channelId: channel.channelId, next: 3 }).then(function (r) {
-      now = r.current; next = r.next;
-      var slot = r.current;
-      if (channel.kind === 'weather') { setStatic(false); card(channel, 'LOCAL FORECAST', 'The weather channel is drawn in the Cable TV app on your TV.'); }
-      else if (slot.kind === 'stream' && slot.url) { setStatic(false); playUrl(slot.url); }
-      else if (slot.itemId) {
-        playUrl(mediaUrl(slot, r.offsetMs), slot.audio ? 0 : r.offsetMs / 1000);
-        if (slot.audio) card(channel, slot.title, [slot.artist, slot.album].filter(Boolean).join(' · '));
-      } else { card(channel, 'UP NEXT', next[0] ? next[0].title + ' at ' + time(Date.parse(next[0].start)) : ''); setStatic(false); }
-      showBanner();
-    }).catch(function () { setStatic(false); card(channel, 'NO SIGNAL', 'This channel has nothing to air right now.'); });
+    var channel = channels[current], seq = ++tuneSeq;
+    show($('card'), false); setStatic(true); stop(); closeLive();
+    refreshNow(channel);
+    if (!channel.liveTvId) { noSignal('This channel isn\'t in Live TV yet: run "Refresh Guide" in Scheduled Tasks.'); return; }
+    var q = 'UserId=' + userId + '&IsPlayback=true&AutoOpenLiveStream=true&StartTimeTicks=0&MaxStreamingBitrate=' + PROFILE.MaxStreamingBitrate;
+    fetch(base + '/Items/' + channel.liveTvId + '/PlaybackInfo?' + q, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ DeviceProfile: PROFILE }) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (info) {
+        var source = (info.MediaSources || [])[0];
+        if (seq !== tuneSeq) { if (source && source.LiveStreamId) { liveStreamId = source.LiveStreamId; closeLive(); } return; }
+        if (!source || !(source.TranscodingUrl || source.Path)) throw new Error('no stream');
+        liveStreamId = source.LiveStreamId || null;
+        playUrl(source.TranscodingUrl ? base + source.TranscodingUrl : source.Path);
+      })
+      .catch(function () { if (seq === tuneSeq) noSignal('The channel could not be tuned.'); });
   }
   video.addEventListener('playing', function () { setStatic(false); });
   video.addEventListener('waiting', function () { setStatic(true); });
   video.addEventListener('ended', function () { tune(current); });
   video.addEventListener('error', function () { if (!hls) noSignal('The stream could not be played.'); });
-  // Rejoin the schedule at each slot boundary (breaks, next programme).
-  setInterval(function () { if (now && nowMs() >= Date.parse(now.end) && $('guide').style.display !== 'flex') tune(current); }, 1000);
+  window.addEventListener('pagehide', closeLive);
+  // The stream plays on through breaks and programmes; only the banner's "now playing" needs refreshing.
+  setInterval(function () { if (now && nowMs() >= Date.parse(now.end)) { now = null; refreshNow(channels[current]); } }, 1000);
 
   function showBanner() {
     var c = channels[current], b = $('banner');

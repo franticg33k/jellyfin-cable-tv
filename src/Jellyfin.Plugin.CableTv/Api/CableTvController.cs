@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -10,7 +11,12 @@ using Jellyfin.Plugin.CableTv.Configuration;
 using Jellyfin.Plugin.CableTv.Content;
 using Jellyfin.Plugin.CableTv.Packs;
 using Jellyfin.Plugin.CableTv.Scheduling;
+using Jellyfin.Plugin.CableTv.LiveTv;
 using Jellyfin.Plugin.CableTv.Streaming;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.LiveTv;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -43,6 +49,7 @@ public class CableTvController : ControllerBase
     private readonly PackService _packs;
     private readonly ChannelSuggester _suggester;
     private readonly Weather.WeatherService _weather;
+    private readonly ILibraryManager _libraryManager;
 
     private static readonly System.Text.Json.JsonSerializerOptions WeatherJson = new(System.Text.Json.JsonSerializerDefaults.Web);
 
@@ -55,8 +62,10 @@ public class CableTvController : ControllerBase
     /// <param name="packs">Import and export.</param>
     /// <param name="suggester">Channel suggestions.</param>
     /// <param name="weather">Weather forecasts.</param>
-    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams, PackService packs, ChannelSuggester suggester, Weather.WeatherService weather)
+    /// <param name="libraryManager">Library manager.</param>
+    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams, PackService packs, ChannelSuggester suggester, Weather.WeatherService weather, ILibraryManager libraryManager)
     {
+        _libraryManager = libraryManager;
         _weather = weather;
         _store = store;
         _refresher = refresher;
@@ -73,6 +82,13 @@ public class CableTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<ChannelListResponse> GetChannels()
     {
+        // Jellyfin's Live TV item for each channel, so clients can play the Live TV stream.
+        var liveTvIds = _libraryManager
+            .GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.LiveTvChannel], Recursive = true })
+            .OfType<LiveTvChannel>()
+            .Where(c => string.Equals(c.ServiceName, CableTvLiveTvService.ServiceName, StringComparison.OrdinalIgnoreCase) && c.ExternalId is not null)
+            .GroupBy(c => c.ExternalId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Id.ToString("N", CultureInfo.InvariantCulture), StringComparer.OrdinalIgnoreCase);
         var channels = _store.Channels
             .Select(c => new ChannelDto(
                 c.Definition.Id,
@@ -82,7 +98,8 @@ public class CableTvController : ControllerBase
                 c.Timeline.Version,
                 c.Timeline.PoolSize,
                 string.IsNullOrWhiteSpace(c.Definition.Category) ? null : c.Definition.Category.Trim(),
-                c.Definition.Kind == ChannelKind.Standard ? null : c.Definition.Kind.ToString().ToLowerInvariant()))
+                c.Definition.Kind == ChannelKind.Standard ? null : c.Definition.Kind.ToString().ToLowerInvariant(),
+                liveTvIds.GetValueOrDefault(c.Definition.Id)))
             .ToList();
 
         return new ChannelListResponse(DateTime.UtcNow, channels);

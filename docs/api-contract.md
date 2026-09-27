@@ -7,7 +7,7 @@ server's naming policy. Times are UTC ISO 8601.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /CableTv/Channels` | Channel list: id, number, name, `logoUrl` (absolute URL of `/CableTv/Logo/{id}`), `category`, `scheduleVersion`, `poolSize`, `kind` (`stream` or `weather`; omitted for standard channels) |
+| `GET /CableTv/Channels` | Channel list: id, number, name, `logoUrl` (absolute URL of `/CableTv/Logo/{id}`), `category`, `scheduleVersion`, `poolSize`, `kind` (`stream` or `weather`; omitted for standard channels), `liveTvId` (Jellyfin's Live TV item for the channel: play it with `POST /Items/{liveTvId}/PlaybackInfo?AutoOpenLiveStream=true`; omitted until the guide has run) |
 | `GET /CableTv/Logo/{channelId}` | Anonymous: the channel's logo image (or a redirect to it) |
 | `GET /CableTv/Schedule?channelIds=&from=&to=` | Resolved slots for a window, with `serverTime` |
 | `GET /CableTv/Guide?channelIds=&from=&to=` | Programmes for a window (breaks folded into one entry each): what a guide grid needs, about 30× smaller than `Schedule` |
