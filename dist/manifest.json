@@ -6,15 +6,15 @@
     "overview": "Scheduled, always-on channels built from your library",
     "owner": "franticg33k",
     "category": "LiveTV",
-    "imageUrl": "",
+    "imageUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/images/icon.png",
     "versions": [
       {
         "version": "0.5.0.0",
         "changelog": "0.5.0.0: stream (HLS/URL), weather and music channels; trailer channels (\"Coming attractions\") and trailer sources; artist sources and music suggestions; content groups; a browser TV page at /CableTv/Web; commercials pre-converted by a scheduled task; a configurable service name; the guide folds songs and trailers into blocks. 0.4.1.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint, channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag. 0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and pinned-episode imports, more source types with exclusions, channel logos, guide categories, faster rebuilds.",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/franticg33k/jellyfin-cable-tv/main/dist/cabletv_0.5.0.0.zip",
-        "checksum": "938ebfe39e0e0e591c71ebb603623765",
-        "timestamp": "2026-09-26T16:42:40Z"
+        "sourceUrl": "https://github.com/franticg33k/jellyfin-cable-tv/releases/download/v0.5.0.0/cabletv_0.5.0.0.zip",
+        "checksum": "7cdc5a061c30038ce424bc40d72d0f96",
+        "timestamp": "2026-09-27T01:31:11Z"
       }
     ]
   }
