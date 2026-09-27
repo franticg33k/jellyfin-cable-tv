@@ -58,11 +58,15 @@
           </div>
           <datalist id="ctvZones"></datalist>
           <div class="ctv-row">
-            <label class="ctv-field grow"><span>Service name (what the TV mode and web TV call themselves)</span>
+            <label class="ctv-field grow"><span>Service name: shown in the TV guide, on the web TV page and in the menu</span>
               <input type="text" id="ServiceName" placeholder="Cable TV" />
             </label>
             <a class="ctv-btn" id="WebTvLink" href="#" target="_blank" rel="noopener">Open web TV</a>
           </div>
+          <div class="ctv-row">
+            <label class="ctv-field"><span><input type="checkbox" id="ShowInWebMenu" /> Show the service in Jellyfin's side menu (opens the web TV page)</span></label>
+          </div>
+          <p class="ctv-hint">The web TV page plays your channels in the browser. The menu link appears for everyone once there are channels; reload Jellyfin's web app after changing this.</p>
           <datalist id="ctvStudios"></datalist>
           <datalist id="ctvGroups"></datalist>
 
@@ -664,6 +668,7 @@
             page.querySelector('#SubtitleLanguage').value = config.SubtitleLanguage || '';
             page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
             page.querySelector('#ServiceName').value = config.ServiceName || '';
+            page.querySelector('#ShowInWebMenu').checked = config.ShowInWebMenu !== false;
             page.querySelector('#WebTvLink').href = ApiClient.getUrl('CableTv/Web');
             config.ContentGroups = config.ContentGroups || [];
             renderGroups();
@@ -962,6 +967,7 @@
             config.SubtitleLanguage = page.querySelector('#SubtitleLanguage').value.trim();
             config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
             config.ServiceName = page.querySelector('#ServiceName').value.trim() || 'Cable TV';
+            config.ShowInWebMenu = page.querySelector('#ShowInWebMenu').checked;
             config.ContentGroups = state.config.ContentGroups;
             config.CommercialSources = state.config.CommercialSources;
             config.Channels = state.config.Channels;

@@ -38,8 +38,8 @@ a new folder `<jellyfin config>/plugins/Cable TV_<version>/` (Docker: `/config/p
 
 Open **Cable TV** in the dashboard sidebar (under Plugins), or **Dashboard → Plugins → Cable TV**. The page is a form:
 
-- **General**: the service name shown in guides and on the web TV page (default "Cable TV"), and the time zone
-  that time slots, restricted hours, seasons and premieres use.
+- **General**: the service name shown in guides, on the web TV page and in Jellyfin's menu (default "Cable TV"),
+  whether that menu link is shown, and the time zone that time slots, restricted hours, seasons and premieres use.
 - **Live TV stream** and global **Commercials** sources.
 - **Channels**: pick a channel on the left, edit it on the right. Sources use pickers for your libraries,
   collections and playlists, with genre suggestions.
@@ -73,7 +73,8 @@ Changing a group changes every channel that uses it.
 
 ### Web TV
 
-**Open web TV** on the settings page (or `/CableTv/Web` on your server) is a browser TV: sign in with your Jellyfin
+Click the service name in Jellyfin web's menu (header or side menu; it appears once you have channels and opens in a
+new tab), **Open web TV** on the settings page, or go to `/CableTv/Web` on your server. It is a browser TV: sign in with your Jellyfin
 account, then channel up/down, number keys, a guide (G) and full screen (F). It plays the channels' Live TV streams
 with [hls.js](https://github.com/video-dev/hls.js), served by the plugin.
 

@@ -1,7 +1,7 @@
 # Plugin manifest for jprm (Jellyfin plugin repository manager).
 name: "Cable TV"
 guid: "ddef6196-173c-4477-b5e8-72811d8d96e4"
-version: "0.5.5.0"
+version: "0.5.6.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 overview: "Scheduled, always-on channels built from your library"
@@ -14,6 +14,7 @@ owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
+  0.5.6.0: the service name appears in Jellyfin web's menu and opens the web TV page; a setting hides it.
   0.5.5.0: optional subtitle burn-in for the Live TV stream (and so the web TV page and every Live TV client): text
   subtitles (SRT, ASS, WebVTT, embedded or external) and image subtitles (PGS, DVD, DVB) in a preferred language,
   set globally with a per-channel override.

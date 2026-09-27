@@ -42,6 +42,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool NormalizeLoudness { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether Jellyfin's side menu gets a link, named after the service, that opens
+    /// the web TV page (shown once there are channels).
+    /// </summary>
+    public bool ShowInWebMenu { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the Live TV stream burns subtitles into the picture (channels can
     /// override it). Items with subtitles are then transcoded, which costs CPU.
     /// </summary>
