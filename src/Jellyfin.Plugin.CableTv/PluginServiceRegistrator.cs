@@ -6,6 +6,7 @@ using Jellyfin.Plugin.CableTv.Streaming;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Plugins;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.CableTv;
@@ -29,5 +30,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<CommercialCache>();
         serviceCollection.AddSingleton<ILiveTvService, CableTvLiveTvService>();
         serviceCollection.AddHostedService<ConfigurationWatcher>();
+        serviceCollection.AddTransient<IStartupFilter, Web.WebMenuStartupFilter>();
     }
 }
