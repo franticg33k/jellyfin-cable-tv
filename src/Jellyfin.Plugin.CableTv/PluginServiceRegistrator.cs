@@ -20,11 +20,13 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<ContentPoolResolver>();
         serviceCollection.AddSingleton<LogoService>();
+        serviceCollection.AddSingleton<Weather.WeatherService>();
         serviceCollection.AddSingleton<ChannelSuggester>();
         serviceCollection.AddSingleton<PackService>();
         serviceCollection.AddSingleton<ChannelStore>();
         serviceCollection.AddSingleton<GuideRefresher>();
         serviceCollection.AddSingleton<StreamManager>();
+        serviceCollection.AddSingleton<CommercialCache>();
         serviceCollection.AddSingleton<ILiveTvService, CableTvLiveTvService>();
         serviceCollection.AddHostedService<ConfigurationWatcher>();
     }

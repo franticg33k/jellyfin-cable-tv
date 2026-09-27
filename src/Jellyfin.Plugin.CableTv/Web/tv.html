@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cable TV</title>
+<style>
+  :root { --bg:#1b3a55; --top:#0e2538; --cell:#4b6c8b; --movie:#7b5b8b; --kids:#5b8a5b; --focus:#f5e5a2; --focusText:#14202c; --accent:#e9c648; --text:#fff; --muted:#c7d2df; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:#000; color:var(--text); font-family: "Share Tech Mono", ui-monospace, Menlo, Consolas, monospace; overflow:hidden; }
+  #screen { position:fixed; inset:0; background:#000; }
+  video { width:100%; height:100%; object-fit:contain; background:#000; }
+  #static { position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; display:none; }
+  #card { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; background:linear-gradient(var(--top), var(--bg)); text-align:center; }
+  #card h1 { color:var(--accent); margin:.2em 0; font-size:5vh; }
+  #banner { position:absolute; left:0; right:0; bottom:0; padding:4vh 4vw 3vh; background:linear-gradient(transparent, rgba(0,0,0,.9)); display:none; }
+  #banner .num { color:var(--accent); font-size:6vh; font-weight:bold; }
+  #banner .row { display:flex; justify-content:space-between; align-items:flex-end; gap:2vw; }
+  .label { color:var(--accent); font-size:1.6vh; letter-spacing:.1em; }
+  .title { font-size:3.2vh; font-weight:bold; }
+  .sub { color:var(--muted); font-size:2vh; }
+  .bar { height:.8vh; background:rgba(255,255,255,.3); border-radius:.4vh; margin-top:1.2vh; }
+  .bar > div { height:100%; background:var(--accent); border-radius:.4vh; }
+  #digits { position:absolute; top:4vh; left:4vw; font-size:8vh; color:var(--accent); background:rgba(0,0,0,.6); padding:0 2vw; border-radius:1vh; display:none; }
+  #guide { position:absolute; inset:0; background:var(--bg); display:none; flex-direction:column; }
+  #guide header { display:flex; justify-content:space-between; align-items:center; padding:1.5vh 2vw; background:var(--top); }
+  #guide header b { color:var(--accent); font-size:2.6vh; }
+  #times, .grow { display:flex; }
+  #times { background:var(--top); height:4vh; align-items:center; font-size:1.8vh; }
+  #times div { flex:0 0 auto; border-left:1px solid #455667; padding-left:.6vw; }
+  #rows { flex:1; overflow-y:auto; position:relative; }
+  .grow { height:7vh; margin:2px 0; }
+  .chan { flex:0 0 12vw; background:#02203f; padding:.6vh .8vw; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .chan b { display:block; font-size:2.2vh; }
+  .chan span { color:var(--muted); font-size:1.5vh; }
+  .cells { position:relative; flex:1; }
+  .cell { position:absolute; top:0; bottom:0; background:var(--cell); border-radius:.4vh; padding:.5vh .6vw; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:1.8vh; border:2px solid transparent; cursor:pointer; }
+  .cell small { display:block; color:var(--muted); font-size:1.4vh; overflow:hidden; text-overflow:ellipsis; }
+  .cell.movie { background:var(--movie); } .cell.kids { background:var(--kids); } .cell.off { background:#2b3b4b; }
+  .cell.focus { background:var(--focus); color:var(--focusText); border-color:#fff; } .cell.focus small { color:var(--focusText); }
+  .grow.current .chan { background:#3e5f55; box-shadow: inset 4px 0 var(--accent); }
+  #now { position:absolute; top:0; bottom:0; width:2px; background:rgba(233,198,72,.6); pointer-events:none; }
+  #help { color:var(--muted); font-size:1.6vh; }
+  #msg { position:absolute; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:4vw; font-size:2.4vh; }
+  #msg a { color:var(--accent); }
+  #login { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:linear-gradient(var(--top), var(--bg)); }
+  #login form { background:rgba(0,0,0,.35); padding:4vh 3vw; border-radius:1vh; display:flex; flex-direction:column; gap:1.5vh; min-width:30vw; }
+  #login h1 { color:var(--accent); margin:0 0 1vh; font-size:3.5vh; }
+  #login input, #login button { font:inherit; font-size:2.2vh; padding:1vh 1vw; border-radius:.6vh; border:1px solid #455667; background:#02203f; color:#fff; }
+  #login button { background:var(--accent); color:var(--focusText); font-weight:bold; cursor:pointer; }
+  #loginError { color:#ff8a80; min-height:2.4vh; }
+</style>
+</head>
+<body>
+<div id="screen">
+  <video id="video" autoplay playsinline></video>
+  <canvas id="static" width="192" height="108"></canvas>
+  <div id="card"><div id="cardLogo"></div><h1 id="cardTitle"></h1><div class="sub" id="cardSub"></div></div>
+  <div id="banner"></div>
+  <div id="digits"></div>
+  <div id="guide">
+    <header><b id="service">CABLE TV</b><span id="help">↑↓ channels · ←→ time · Enter watch · Esc close · 0-9 tune</span><span id="clock"></span></header>
+    <div id="times"></div>
+    <div id="rows"></div>
+  </div>
+  <div id="msg"></div>
+  <div id="login"><form id="loginForm">
+    <h1 id="loginTitle">CABLE TV</h1>
+    <input id="loginUser" autocomplete="username" placeholder="Jellyfin user name" required>
+    <input id="loginPass" type="password" autocomplete="current-password" placeholder="Password">
+    <button type="submit">Sign in</button>
+    <div id="loginError"></div>
+  </form></div>
+</div>
+<script src="hls.js"></script>
+<script>
+(function () {
+  'use strict';
+  var base = location.pathname.split('/CableTv/')[0];
+  var token = null, userId = null;
+  try {
+    // Our own sign-in first, then the Jellyfin web client's remembered session.
+    var own = JSON.parse(localStorage.getItem('cabletv_web_auth') || 'null');
+    if (own && own.token) { token = own.token; userId = own.userId; }
+  } catch (e) { /* none */ }
+  if (!token) try {
+    var creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+    var servers = (creds.Servers || []).filter(function (s) { return s.AccessToken; });
+    var mine = servers.filter(function (s) { return [s.ManualAddress, s.LocalAddress, s.RemoteAddress].some(function (a) { return a && a.indexOf(location.host) >= 0; }); })[0] || servers[0];
+    if (mine) { token = mine.AccessToken; userId = mine.UserId; }
+  } catch (e) { /* not signed in */ }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var video = $('video'), hls = null;
+  var channels = [], guide = {}, current = 0, digits = '', digitTimer = null, bannerTimer = null, now = null, next = [];
+  var windowStart = 0, focusRow = 0, focusCol = 0, serverOffset = 0;
+  var HALF = 30 * 60000, SLOTS = 4;
+
+  function show(el, on, display) { el.style.display = on ? (display || 'block') : 'none'; }
+  function message(html) { $('msg').innerHTML = html; show($('msg'), true, 'flex'); }
+  function nowMs() { return Date.now() + serverOffset; }
+  function time(ms) { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+
+  function api(path, query) {
+    var qs = Object.keys(query || {}).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(query[k]); }).join('&');
+    return fetch(base + '/' + path + (qs ? '?' + qs : ''), { headers: { Authorization: 'MediaBrowser Client="Cable TV Web", Device="Browser", DeviceId="cabletv-web", Version="1", Token="' + token + '"' } })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (json) { if (json.serverTime) serverOffset = Date.parse(json.serverTime) - Date.now(); return json; });
+  }
+
+  // ---- static ----
+  var staticTimer = null;
+  function setStatic(on) {
+    var canvas = $('static'); show(canvas, on);
+    clearInterval(staticTimer);
+    if (!on) return;
+    var ctx = canvas.getContext('2d'), img = ctx.createImageData(192, 108);
+    staticTimer = setInterval(function () {
+      for (var i = 0; i < img.data.length; i += 4) { var v = Math.random() * 255; v = v < 110 ? 16 : v; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+      ctx.putImageData(img, 0, 0);
+    }, 60);
+  }
+
+  // ---- playback ----
+  function stop() { if (hls) { hls.destroy(); hls = null; } video.removeAttribute('src'); video.load(); }
+  function playUrl(url) {
+    stop();
+    if (url.indexOf('.m3u8') >= 0 && !video.canPlayType('application/vnd.apple.mpegurl') && window.Hls && Hls.isSupported()) {
+      hls = new Hls({ maxBufferLength: 20 });
+      hls.loadSource(url); hls.attachMedia(video);
+    } else {
+      video.src = url;
+    }
+    video.play().catch(function () { /* autoplay needs a click first */ });
+  }
+  function mediaUrl(slot, offsetMs) {
+    var q = 'api_key=' + encodeURIComponent(token) + '&DeviceId=cabletv-web&PlaySessionId=' + Math.random().toString(36).slice(2) + '&StartTimeTicks=' + Math.max(0, Math.floor(offsetMs * 10000));
+    if (slot.audio) return base + '/Audio/' + slot.itemId + '/universal?UserId=' + userId + '&Container=mp3,aac,m4a,flac,ogg&TranscodingContainer=mp3&AudioCodec=mp3&' + q;
+    return base + '/Videos/' + slot.itemId + '/master.m3u8?MediaSourceId=' + (slot.mediaSourceId || slot.itemId) + '&VideoCodec=h264&AudioCodec=aac&TranscodingMaxAudioChannels=2&SegmentContainer=ts&' + q;
+  }
+  function card(channel, title, sub) {
+    $('cardLogo').innerHTML = channel && channel.logoUrl ? '<img src="' + channel.logoUrl + '" style="max-height:18vh;max-width:40vw">' : '';
+    $('cardTitle').textContent = title; $('cardSub').textContent = sub || '';
+    show($('card'), true, 'flex');
+  }
+
+  function tune(index) {
+    if (!channels.length) return;
+    current = (index + channels.length) % channels.length;
+    var channel = channels[current];
+    show($('card'), false); setStatic(true); stop();
+    api('CableTv/Now', { channelId: channel.channelId, next: 3 }).then(function (r) {
+      now = r.current; next = r.next;
+      var slot = r.current;
+      if (channel.kind === 'weather') { setStatic(false); card(channel, 'LOCAL FORECAST', 'The weather channel is drawn in the Cable TV app on your TV.'); }
+      else if (slot.kind === 'stream' && slot.url) { setStatic(false); playUrl(slot.url); }
+      else if (slot.itemId) {
+        playUrl(mediaUrl(slot, r.offsetMs));
+        if (slot.audio) card(channel, slot.title, [slot.artist, slot.album].filter(Boolean).join(' · '));
+      } else { card(channel, 'UP NEXT', next[0] ? next[0].title + ' at ' + time(Date.parse(next[0].start)) : ''); setStatic(false); }
+      showBanner();
+    }).catch(function () { setStatic(false); card(channel, 'NO SIGNAL', 'This channel has nothing to air right now.'); });
+  }
+  video.addEventListener('playing', function () { setStatic(false); });
+  video.addEventListener('waiting', function () { setStatic(true); });
+  video.addEventListener('ended', function () { tune(current); });
+  video.addEventListener('error', function () { setTimeout(function () { tune(current); }, 3000); });
+  // Rejoin the schedule at each slot boundary (breaks, next programme).
+  setInterval(function () { if (now && nowMs() >= Date.parse(now.end) && $('guide').style.display !== 'flex') tune(current); }, 1000);
+
+  function showBanner() {
+    var c = channels[current], b = $('banner');
+    if (!now) return;
+    var start = Date.parse(now.start), end = Date.parse(now.end), p = Math.min(100, Math.max(0, (nowMs() - start) / (end - start) * 100));
+    var nx = next.filter(function (s) { return s.kind === 'program'; })[0];
+    b.innerHTML = '<div class="row"><div><div class="label">NOW PLAYING</div><div class="title"></div><div class="sub"></div></div>' +
+      '<div style="text-align:right"><div class="num"></div><div class="sub cname"></div></div></div><div class="bar"><div style="width:' + p + '%"></div></div>' +
+      (nx ? '<div class="sub" style="margin-top:1vh">COMING UP · ' + time(Date.parse(nx.start)) + ' <span class="nx"></span></div>' : '');
+    b.querySelector('.title').textContent = now.title || c.name;
+    b.querySelector('.sub').textContent = [now.episode, now.episodeTitle].filter(Boolean).join(' - ');
+    b.querySelector('.num').textContent = c.number; b.querySelector('.cname').textContent = c.name;
+    if (nx) b.querySelector('.nx').textContent = nx.title || '';
+    show(b, true); clearTimeout(bannerTimer); bannerTimer = setTimeout(function () { show(b, false); }, 6000);
+  }
+
+  // ---- guide ----
+  function loadGuide() {
+    var start = nowMs(); start -= start % HALF;
+    return api('CableTv/Guide', { from: new Date(start).toISOString(), to: new Date(start + 6 * 3600000).toISOString() }).then(function (r) {
+      guide = {}; r.channels.forEach(function (c) { guide[c.channelId] = c.programs; });
+      if (!windowStart) windowStart = start;
+    });
+  }
+  function renderGuide() {
+    var wEnd = windowStart + SLOTS * HALF, times = $('times'), rows = $('rows');
+    times.innerHTML = '<div style="flex:0 0 12vw;border:0;padding-left:1vw">' + time(nowMs()) + '</div>';
+    for (var i = 0; i < SLOTS; i++) times.innerHTML += '<div style="width:calc((100% - 12vw) / 4)">' + time(windowStart + i * HALF) + '</div>';
+    rows.innerHTML = '';
+    channels.forEach(function (c, r) {
+      var row = document.createElement('div'); row.className = 'grow' + (r === current ? ' current' : '');
+      row.innerHTML = '<div class="chan"><b></b><span></span></div><div class="cells"></div>';
+      row.querySelector('b').textContent = c.number; row.querySelector('span').textContent = c.name;
+      var cells = row.querySelector('.cells');
+      var programs = (guide[c.channelId] || []).filter(function (p) { return Date.parse(p.end) > windowStart && Date.parse(p.start) < wEnd; });
+      programs.forEach(function (p, i) {
+        var s = Math.max(Date.parse(p.start), windowStart), e = Math.min(Date.parse(p.end), wEnd);
+        var el = document.createElement('div');
+        var kids = /^(TV-Y|TV-Y7|TV-G|G)$/i.test(p.rating || '');
+        el.className = 'cell' + (!p.itemId && !p.kind ? ' off' : p.movie ? ' movie' : kids ? ' kids' : '') + (r === focusRow && i === focusCol ? ' focus' : '');
+        el.style.left = ((s - windowStart) / (wEnd - windowStart) * 100) + '%';
+        el.style.width = 'calc(' + ((e - s) / (wEnd - windowStart) * 100) + '% - 2px)';
+        var title = p.title || 'Off air';
+        el.textContent = title + (p.movie && p.year && title.indexOf('(' + p.year + ')') < 0 ? ' (' + p.year + ')' : '');
+        var sm = document.createElement('small'); sm.textContent = [p.episode, p.episodeTitle || p.artist].filter(Boolean).join(' - '); el.appendChild(sm);
+        el.onclick = function () { focusRow = r; focusCol = i; select(); };
+        cells.appendChild(el);
+      });
+      rows.appendChild(row);
+    });
+    var t = nowMs();
+    if (t >= windowStart && t < wEnd) {
+      var line = document.createElement('div'); line.id = 'now';
+      line.style.left = 'calc(12vw + (100% - 12vw) * ' + ((t - windowStart) / (wEnd - windowStart)) + ')';
+      rows.appendChild(line);
+    }
+    var focusEl = rows.querySelector('.cell.focus'); if (focusEl) focusEl.scrollIntoView({ block: 'nearest' });
+  }
+  function programsAt(r) {
+    var wEnd = windowStart + SLOTS * HALF;
+    return (guide[channels[r].channelId] || []).filter(function (p) { return Date.parse(p.end) > windowStart && Date.parse(p.start) < wEnd; });
+  }
+  function openGuide() {
+    focusRow = current; windowStart = 0;
+    loadGuide().then(function () {
+      var t = nowMs(); focusCol = Math.max(0, programsAt(focusRow).findIndex(function (p) { return Date.parse(p.start) <= t && Date.parse(p.end) > t; }));
+      show($('guide'), true, 'flex'); renderGuide();
+    });
+  }
+  function select() {
+    var p = programsAt(focusRow)[focusCol], t = nowMs();
+    if (p && Date.parse(p.start) > t) { $('help').textContent = (p.title || '') + ' starts at ' + time(Date.parse(p.start)) + ' on ' + channels[focusRow].number; return; }
+    show($('guide'), false); tune(focusRow);
+  }
+
+  // ---- keys ----
+  function commitDigits() {
+    var n = digits; digits = ''; show($('digits'), false);
+    var i = channels.findIndex(function (c) { return c.number === n || parseInt(c.number, 10) === parseInt(n, 10); });
+    if (i >= 0) tune(i);
+  }
+  document.addEventListener('keydown', function (e) {
+    var guideOpen = $('guide').style.display === 'flex';
+    if (/^[0-9]$/.test(e.key) && !guideOpen) {
+      digits += e.key; $('digits').textContent = digits; show($('digits'), true);
+      clearTimeout(digitTimer); digitTimer = setTimeout(commitDigits, 2000); return;
+    }
+    if (guideOpen) {
+      var rows = programsAt(focusRow);
+      switch (e.key) {
+        case 'ArrowDown': focusRow = Math.min(channels.length - 1, focusRow + 1); focusCol = Math.min(focusCol, Math.max(0, programsAt(focusRow).length - 1)); break;
+        case 'ArrowUp': focusRow = Math.max(0, focusRow - 1); focusCol = Math.min(focusCol, Math.max(0, programsAt(focusRow).length - 1)); break;
+        case 'ArrowRight': if (focusCol < rows.length - 1) focusCol++; else if (windowStart < nowMs() + 4 * 3600000) { windowStart += HALF; focusCol = Math.max(0, programsAt(focusRow).length - 1); } break;
+        case 'ArrowLeft': if (focusCol > 0) focusCol--; else if (windowStart > nowMs() - HALF) { windowStart -= HALF; focusCol = 0; } break;
+        case 'Enter': select(); return;
+        case 'Escape': case 'g': case 'Backspace': show($('guide'), false); return;
+        default: return;
+      }
+      e.preventDefault(); renderGuide(); return;
+    }
+    switch (e.key) {
+      case 'ArrowUp': case 'PageUp': case 'ChannelUp': tune(current + 1); break;
+      case 'ArrowDown': case 'PageDown': case 'ChannelDown': tune(current - 1); break;
+      case 'Enter': case 'g': openGuide(); break;
+      case 'i': case 'ArrowLeft': case 'ArrowRight': showBanner(); break;
+      case 'f': if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); break;
+      default: return;
+    }
+    e.preventDefault();
+  });
+  document.addEventListener('click', function (e) { if (e.target === video || e.target.id === 'card') { video.play().catch(function () {}); showBanner(); } });
+  setInterval(function () { $('clock').textContent = time(nowMs()); }, 1000);
+
+  // ---- start ----
+  var authHeader = 'MediaBrowser Client="Cable TV Web", Device="Browser", DeviceId="cabletv-web", Version="1"';
+  function signIn() {
+    show($('login'), true, 'flex');
+    $('loginUser').focus();
+    $('loginForm').onsubmit = function (e) {
+      e.preventDefault();
+      $('loginError').textContent = '';
+      fetch(base + '/Users/AuthenticateByName', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+        body: JSON.stringify({ Username: $('loginUser').value, Pw: $('loginPass').value })
+      }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (r) {
+        token = r.AccessToken; userId = r.User.Id;
+        try { localStorage.setItem('cabletv_web_auth', JSON.stringify({ token: token, userId: userId })); } catch (err) { /* session only */ }
+        show($('login'), false);
+        start();
+      }).catch(function () { $('loginError').textContent = 'Wrong user name or password.'; });
+    };
+  }
+
+  if (!token) { signIn(); return; }
+  start();
+
+  function start() {
+  Promise.all([api('CableTv/Channels'), api('CableTv/Presentation').catch(function () { return {}; })]).then(function (r) {
+    channels = r[0].channels;
+    if (r[1].serviceName) { $('service').textContent = r[1].serviceName.toUpperCase(); document.title = r[1].serviceName; }
+    if (!channels.length) { message('No Cable TV channels yet. Add some in Dashboard → Plugins → Cable TV.'); return; }
+    var remembered = parseInt(localStorage.getItem('cabletv_web_channel') || '0', 10) || 0;
+    tune(Math.min(remembered, channels.length - 1));
+    window.addEventListener('beforeunload', function () { try { localStorage.setItem('cabletv_web_channel', String(current)); } catch (e) {} });
+  }).catch(function (err) {
+    // An expired or revoked token: sign in again.
+    if (String(err.message) === '401') { try { localStorage.removeItem('cabletv_web_auth'); } catch (e) {} token = null; signIn(); return; }
+    message('Couldn\'t reach the Cable TV plugin.');
+  });
+  }
+})();
+</script>
+</body>
+</html>

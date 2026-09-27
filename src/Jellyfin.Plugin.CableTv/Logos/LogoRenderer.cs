@@ -22,7 +22,8 @@ public static class LogoRenderer
     /// <summary>Logo height in pixels.</summary>
     public const int Height = 360;
 
-    private static readonly Lazy<SKTypeface> Typeface = new(LoadTypeface);
+    /// <summary>Gets the embedded display font (Oswald), shared with other drawn cards.</summary>
+    internal static readonly Lazy<SKTypeface> Typeface = new(LoadTypeface);
 
     /// <summary>
     /// Draws a logo as PNG.

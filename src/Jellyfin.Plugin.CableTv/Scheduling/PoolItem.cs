@@ -65,6 +65,21 @@ public sealed record PoolItem(Guid ItemId, string MediaSourceId, long DurationTi
     /// <summary>Gets a value indicating whether the item has an audio stream.</summary>
     public bool HasAudio { get; init; } = true;
 
+    /// <summary>Gets a value indicating whether the item is music (no video of its own).</summary>
+    public bool IsAudio { get; init; }
+
+    /// <summary>Gets the artist, for music.</summary>
+    public string? Artist { get; init; }
+
+    /// <summary>Gets the album, for music.</summary>
+    public string? Album { get; init; }
+
+    /// <summary>Gets a value indicating whether the item is a trailer.</summary>
+    public bool IsTrailer { get; init; }
+
+    /// <summary>Gets the movie or series a trailer belongs to.</summary>
+    public Guid? OwnerId { get; init; }
+
     /// <summary>Gets when the item was added to the library, used for premieres.</summary>
     public DateTime? DateCreated { get; init; }
 

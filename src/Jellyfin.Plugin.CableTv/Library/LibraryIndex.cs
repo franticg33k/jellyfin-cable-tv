@@ -19,6 +19,7 @@ public sealed class LibraryIndex
     private readonly Dictionary<string, List<IndexedTitle>> _byGenre = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<IndexedTitle>> _byTag = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<IndexedTitle>> _byRating = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<IndexedTitle>> _byArtist = new(StringComparer.OrdinalIgnoreCase);
     private readonly (IndexedTitle Title, string Key)[] _keyed;
 
     /// <summary>
@@ -56,6 +57,11 @@ public sealed class LibraryIndex
             foreach (var tag in title.Tags)
             {
                 Add(_byTag, tag.Trim(), title);
+            }
+
+            foreach (var artist in title.Artists)
+            {
+                Add(_byArtist, artist.Trim(), title);
             }
 
             if (!string.IsNullOrWhiteSpace(title.OfficialRating))
@@ -133,6 +139,11 @@ public sealed class LibraryIndex
     /// <param name="names">Tags.</param>
     /// <returns>The titles.</returns>
     public IEnumerable<IndexedTitle> WithTag(IEnumerable<string> names) => Lookup(_byTag, names);
+
+    /// <summary>Albums by any of the artists.</summary>
+    /// <param name="names">Artist names.</param>
+    /// <returns>The albums.</returns>
+    public IEnumerable<IndexedTitle> WithArtist(IEnumerable<string> names) => Lookup(_byArtist, names);
 
     /// <summary>Titles with any of the ratings.</summary>
     /// <param name="ratings">Official ratings.</param>

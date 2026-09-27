@@ -1,7 +1,7 @@
 # Plugin manifest for jprm (Jellyfin plugin repository manager).
 name: "Cable TV"
 guid: "ddef6196-173c-4477-b5e8-72811d8d96e4"
-version: "0.4.1.0"
+version: "0.5.0.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 overview: "Scheduled, always-on channels built from your library"
@@ -14,6 +14,9 @@ owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
+  0.5.0.0: stream (HLS/URL), weather and music channels; trailer channels ("Coming attractions") and trailer
+  sources; artist sources and music suggestions; content groups; a browser TV page at /CableTv/Web; commercials
+  pre-converted by a scheduled task; a configurable service name; the guide folds songs and trailers into blocks.
   0.4.1.0: faster schedules (cached cycle order, allocation-free commercial picks), a light /CableTv/Guide endpoint,
   channels built right after start-up, cacheable logos; slots carry year, rating and a movie flag.
   0.4.0.0: channel suggestions, quick channels, lineup CSV and channel pack import/export, seasonal and

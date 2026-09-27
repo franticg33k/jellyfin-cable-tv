@@ -10,6 +10,7 @@ using Jellyfin.Plugin.CableTv.Library;
 using Jellyfin.Plugin.CableTv.Scheduling;
 using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -31,7 +32,10 @@ public class ContentPoolResolver
     /// <summary>
     /// Kinds of standalone items the library index holds; episodes are reached through their series.
     /// </summary>
-    private static readonly BaseItemKind[] IndexedKinds = [BaseItemKind.Series, BaseItemKind.Movie, BaseItemKind.MusicVideo, BaseItemKind.Video];
+    private static readonly BaseItemKind[] IndexedKinds = [BaseItemKind.Series, BaseItemKind.Movie, BaseItemKind.MusicVideo, BaseItemKind.Video, BaseItemKind.MusicAlbum];
+
+    /// <summary>How deep content groups may include other groups.</summary>
+    private const int MaxGroupDepth = 4;
 
     /// <summary>How long previews, suggestions and import checks reuse the last library index.</summary>
     private static readonly TimeSpan SharedContextLifetime = TimeSpan.FromMinutes(5);
@@ -235,28 +239,31 @@ public class ContentPoolResolver
 
     private IReadOnlyList<PoolItem> Resolve(IEnumerable<ContentSource> sources, BaseItemKind[] kinds, bool allowSpecials, ResolveContext context)
     {
-        var found = new Dictionary<Guid, (Video Video, int Weight)>();
+        var found = new Dictionary<Guid, (BaseItem Video, int Weight)>();
         var excluded = new HashSet<Guid>();
 
-        foreach (var source in sources)
+        foreach (var source in ExpandGroups(sources, 0))
         {
             var weight = Math.Clamp(source.Weight, 1, 10);
+            var trailers = source.Type == ContentSourceType.Trailers;
             foreach (var item in ResolveSource(source, kinds, context))
             {
-                if (item is not Video video || !IsSchedulable(video, kinds, allowSpecials))
+                // Trailers are extras, which channels otherwise skip.
+                var playable = trailers ? IsPlayableTrailer(item) : IsSchedulable(item, kinds, allowSpecials);
+                if (!playable)
                 {
                     continue;
                 }
 
                 if (source.Exclude)
                 {
-                    excluded.Add(video.Id);
+                    excluded.Add(item.Id);
                 }
                 else
                 {
-                    found[video.Id] = found.TryGetValue(video.Id, out var existing)
-                        ? (video, Math.Max(existing.Weight, weight))
-                        : (video, weight);
+                    found[item.Id] = found.TryGetValue(item.Id, out var existing)
+                        ? (item, Math.Max(existing.Weight, weight))
+                        : (item, weight);
                 }
             }
         }
@@ -282,8 +289,51 @@ public class ContentPoolResolver
             .ToList();
     }
 
-    private static string SortGroup(Video video)
-        => video is Episode episode ? episode.SeriesName ?? string.Empty : string.Empty;
+    private static string SortGroup(BaseItem item) => item switch
+    {
+        Episode episode => episode.SeriesName ?? string.Empty,
+        Audio audio => (audio.AlbumArtists.FirstOrDefault() ?? string.Empty) + "\u0001" + (audio.Album ?? string.Empty),
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// Replaces group sources with the sources of the groups they name (groups may include groups, a few levels deep).
+    /// </summary>
+    private static IEnumerable<ContentSource> ExpandGroups(IEnumerable<ContentSource> sources, int depth)
+    {
+        foreach (var source in sources)
+        {
+            if (source.Type != ContentSourceType.Group)
+            {
+                yield return source;
+                continue;
+            }
+
+            if (depth >= MaxGroupDepth || Plugin.Instance is not { } plugin)
+            {
+                continue;
+            }
+
+            var names = source.Values.Select(v => v.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var members = plugin.Configuration.ContentGroups
+                .Where(g => names.Contains(g.Name.Trim()))
+                .SelectMany(g => g.Sources)
+                .Select(s => s.Type == ContentSourceType.Group ? s : new ContentSource
+                {
+                    // An excluded group excludes everything in it; its members keep their own weights.
+                    Type = s.Type,
+                    Ids = s.Ids,
+                    Values = s.Values,
+                    Weight = Math.Max(s.Weight, source.Weight),
+                    AirHours = s.AirHours ?? source.AirHours,
+                    Exclude = s.Exclude || source.Exclude,
+                });
+            foreach (var member in ExpandGroups(members, depth + 1))
+            {
+                yield return member;
+            }
+        }
+    }
 
     private static BaseItemKind[] ParseKinds(IEnumerable<string> names)
     {
@@ -291,7 +341,7 @@ public class ContentPoolResolver
         foreach (var name in names)
         {
             if (Enum.TryParse<BaseItemKind>(name, true, out var kind)
-                && kind is BaseItemKind.Episode or BaseItemKind.Movie or BaseItemKind.MusicVideo or BaseItemKind.Video or BaseItemKind.Trailer)
+                && kind is BaseItemKind.Episode or BaseItemKind.Movie or BaseItemKind.MusicVideo or BaseItemKind.Video or BaseItemKind.Trailer or BaseItemKind.Audio)
             {
                 kinds.Add(kind);
             }
@@ -300,15 +350,19 @@ public class ContentPoolResolver
         return kinds.Count == 0 ? [BaseItemKind.Episode, BaseItemKind.Movie] : kinds.Distinct().ToArray();
     }
 
-    private static bool IsSchedulable(Video video, BaseItemKind[] kinds, bool allowSpecials)
-        => !video.IsVirtualItem
-           && video.RunTimeTicks is > 0
-           && !string.IsNullOrEmpty(video.Path)
-           && video.ExtraType is null
-           && kinds.Contains(video.GetBaseItemKind())
-           && (allowSpecials || video is not Episode { ParentIndexNumber: 0 });
+    private static bool IsSchedulable(BaseItem item, BaseItemKind[] kinds, bool allowSpecials)
+        => item is Video or Audio
+           && !item.IsVirtualItem
+           && item.RunTimeTicks is > 0
+           && !string.IsNullOrEmpty(item.Path)
+           && item.ExtraType is null
+           && kinds.Contains(item.GetBaseItemKind())
+           && (allowSpecials || item is not Episode { ParentIndexNumber: 0 });
 
-    private PoolItem ToPoolItem(Video video, int weight)
+    private static bool IsPlayableTrailer(BaseItem item)
+        => item is Video && !item.IsVirtualItem && item.RunTimeTicks is > 0 && !string.IsNullOrEmpty(item.Path);
+
+    private PoolItem ToPoolItem(BaseItem video, int weight)
     {
         if (_converted.TryGetValue(video.Id, out var cached) && cached.Modified == video.DateModified)
         {
@@ -320,8 +374,14 @@ public class ContentPoolResolver
         return weight == 1 ? converted : converted with { Weight = weight };
     }
 
-    private PoolItem Convert(Video video)
+    private PoolItem Convert(BaseItem item)
     {
+        if (item is Audio audio)
+        {
+            return ConvertAudio(audio);
+        }
+
+        var video = (Video)item;
         var streams = _mediaSourceManager.GetMediaStreams(video.Id);
         var videoStream = streams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
         var chapters = _chapterManager.GetChapters(video.Id)
@@ -333,13 +393,19 @@ public class ContentPoolResolver
         var imagePath = video.GetImagePath(ImageType.Primary, 0)
                         ?? episode?.Series?.GetImagePath(ImageType.Primary, 0);
 
+        // A trailer is titled after what it advertises.
+        var isTrailer = video.ExtraType == ExtraType.Trailer || video is Trailer;
+        var owner = isTrailer && !video.OwnerId.Equals(Guid.Empty) ? _libraryManager.GetItemById(video.OwnerId) : null;
+
         return new PoolItem(
             video.Id,
             video.Id.ToString("N", CultureInfo.InvariantCulture),
             video.RunTimeTicks!.Value,
-            episode?.SeriesName ?? video.Name)
+            owner?.Name ?? episode?.SeriesName ?? video.Name)
         {
-            EpisodeTitle = episode?.Name,
+            EpisodeTitle = isTrailer ? "Trailer" : episode?.Name,
+            IsTrailer = isTrailer,
+            OwnerId = owner?.Id,
             SeasonNumber = episode?.ParentIndexNumber,
             EpisodeNumber = episode?.IndexNumber,
             SeriesId = episode?.SeriesId,
@@ -357,6 +423,61 @@ public class ContentPoolResolver
             Height = videoStream?.Height,
             HasAudio = streams.Any(s => s.Type == MediaStreamType.Audio),
         };
+    }
+
+    private PoolItem ConvertAudio(Audio audio)
+    {
+        var album = audio.AlbumEntity;
+        return new PoolItem(
+            audio.Id,
+            audio.Id.ToString("N", CultureInfo.InvariantCulture),
+            audio.RunTimeTicks!.Value,
+            audio.Name ?? string.Empty)
+        {
+            IsAudio = true,
+            Artist = audio.AlbumArtists.FirstOrDefault() ?? audio.Artists.FirstOrDefault(),
+            Album = audio.Album,
+            Genres = audio.Genres ?? [],
+            ProductionYear = audio.ProductionYear,
+            ImagePath = audio.GetImagePath(ImageType.Primary, 0) ?? album?.GetImagePath(ImageType.Primary, 0),
+            Path = audio.Path,
+            DateCreated = audio.DateCreated == default ? null : DateTime.SpecifyKind(audio.DateCreated, DateTimeKind.Utc),
+            HasAudio = true,
+        };
+    }
+
+    /// <summary>
+    /// Trailers in the library: local trailers of movies and series (extras) and trailer items, fetched once per
+    /// context with two queries.
+    /// </summary>
+    private IReadOnlyList<BaseItem> Trailers(IReadOnlyCollection<string> values, ResolveContext context)
+    {
+        var all = context.Trailers ??= _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                ExtraTypes = [ExtraType.Trailer],
+                Recursive = true,
+                IsVirtualItem = false,
+            })
+            .Concat(_libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = [BaseItemKind.Trailer],
+                Recursive = true,
+                IsVirtualItem = false,
+            }))
+            .DistinctBy(t => t.Id)
+            .ToList();
+        var movies = values.Any(v => v.StartsWith("movie", StringComparison.OrdinalIgnoreCase));
+        var series = values.Any(v => v.StartsWith("series", StringComparison.OrdinalIgnoreCase) || v.StartsWith("show", StringComparison.OrdinalIgnoreCase));
+        if (movies == series)
+        {
+            return all;
+        }
+
+        return all.Where(t =>
+        {
+            var owner = t.OwnerId.Equals(Guid.Empty) ? null : context.Index.Get(t.OwnerId);
+            return owner is null ? movies : (owner.Kind == TitleKind.Series ? series : movies);
+        }).ToList();
     }
 
     private LibraryIndex BuildIndex()
@@ -381,6 +502,7 @@ public class ContentPoolResolver
                 Series => TitleKind.Series,
                 Movie => TitleKind.Movie,
                 MusicVideo => TitleKind.MusicVideo,
+                MusicAlbum => TitleKind.Album,
                 _ => TitleKind.Video,
             };
             titles.Add(new IndexedTitle(item.Id, kind, item.Name ?? string.Empty, item.ProductionYear)
@@ -389,6 +511,7 @@ public class ContentPoolResolver
                 Studios = item.Studios ?? [],
                 Tags = item.Tags ?? [],
                 OfficialRating = item.OfficialRating,
+                Artists = item is MusicAlbum album ? album.AlbumArtists.Concat(album.Artists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray() : [],
             });
         }
 
@@ -439,6 +562,16 @@ public class ContentPoolResolver
             case ContentSourceType.Episodes:
                 return source.Values.SelectMany(v => PinnedEpisodes(v, context));
 
+            case ContentSourceType.Trailers:
+                return Trailers(source.Values, context);
+
+            case ContentSourceType.Artist:
+                return FromIndex(context.Index.WithArtist(source.Values), kinds, context);
+
+            case ContentSourceType.Group:
+                // Expanded before resolving (ExpandGroups); a group nested too deep resolves to nothing.
+                return [];
+
             default:
                 _logger.LogWarning("Unknown content source type {Type}", source.Type);
                 return [];
@@ -477,6 +610,16 @@ public class ContentPoolResolver
                     }
                 }
             }
+            else if (title.Kind == TitleKind.Album)
+            {
+                if (kinds.Contains(BaseItemKind.Audio))
+                {
+                    foreach (var track in Children(title.Id, [BaseItemKind.Audio], context))
+                    {
+                        yield return track;
+                    }
+                }
+            }
             else if (_libraryManager.GetItemById(title.Id) is { } item)
             {
                 yield return item;
@@ -506,6 +649,8 @@ public class ContentPoolResolver
                 return [];
             case Video video:
                 return [video];
+            case Audio audio:
+                return [audio];
             case Series series:
                 return kinds.Contains(BaseItemKind.Episode) ? Children(series.Id, [BaseItemKind.Episode], context) : [];
             case Folder folder:

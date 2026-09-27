@@ -57,7 +57,14 @@
             </label>
           </div>
           <datalist id="ctvZones"></datalist>
+          <div class="ctv-row">
+            <label class="ctv-field grow"><span>Service name (what the TV mode and web TV call themselves)</span>
+              <input type="text" id="ServiceName" placeholder="Cable TV" />
+            </label>
+            <a class="ctv-btn" id="WebTvLink" href="#" target="_blank" rel="noopener">Open web TV</a>
+          </div>
           <datalist id="ctvStudios"></datalist>
+          <datalist id="ctvGroups"></datalist>
 
           <h3 class="sectionTitle">Live TV stream</h3>
           <div class="ctv-row">
@@ -72,6 +79,10 @@
             <label class="ctv-field"><span>Transcode height</span><input type="number" id="TranscodeHeight" min="240" max="2160" /></label>
             <label class="ctv-field"><span>&nbsp;</span><span><input type="checkbox" id="NormalizeLoudness" /> Level loudness</span></label>
           </div>
+
+          <h3 class="sectionTitle">Content groups</h3>
+          <p class="ctv-hint">Named sets of sources that several channels can share: add a <em>Content group</em> source to a channel to include one. Changing a group changes every channel that uses it.</p>
+          <div id="Groups"></div>
 
           <h3 class="sectionTitle">Commercials</h3>
           <p class="ctv-hint">Used by channels with commercials on that don't list their own. A <em>Home videos</em> library of ads works well.</p>
@@ -194,7 +205,8 @@
         var SOURCE_TYPES = [
           ['Library', 'Library'], ['Collection', 'Collection'], ['Playlist', 'Playlist'],
           ['Genre', 'Genres'], ['Studio', 'Networks / studios'], ['Titles', 'Titles'], ['Decade', 'Decades'], ['Years', 'Years'],
-          ['Tag', 'Tags'], ['Rating', 'Ratings'], ['Keyword', 'Title keywords'], ['Episodes', 'Pinned episodes'], ['Items', 'Item ids']
+          ['Tag', 'Tags'], ['Rating', 'Ratings'], ['Keyword', 'Title keywords'], ['Episodes', 'Pinned episodes'], ['Items', 'Item ids'],
+          ['Trailers', 'Trailers'], ['Artist', 'Music artists'], ['Group', 'Content group']
         ];
         var VALUE_FIELDS = {
           Genre: ['Genres', 'Comedy, Animation', 'ctvGenres'],
@@ -203,9 +215,13 @@
           Years: ['Years or ranges', '1994, 1985-1992', ''],
           Tag: ['Tags', 'Saturday morning', ''],
           Rating: ['Ratings', 'TV-Y, TV-Y7, TV-G, G', ''],
-          Keyword: ['Words in the title', 'christmas, halloween', '']
+          Keyword: ['Words in the title', 'christmas, halloween', ''],
+          Trailers: ['Trailers of: Movies, Series, or empty for both (also works as commercials: a trailer pool)', 'Movies', ''],
+          Artist: ['Artists (music)', 'Queen, ABBA', ''],
+          Group: ['Content groups', 'Saturday cartoons', 'ctvGroups']
         };
-        var ITEM_TYPES = ['Episode', 'Movie', 'MusicVideo', 'Video'];
+        var KINDS = [['Standard', 'Library channel'], ['Stream', 'Outside stream (HLS or MPEG-TS URL)'], ['Weather', 'Local weather']];
+        var ITEM_TYPES = ['Episode', 'Movie', 'MusicVideo', 'Video', 'Audio'];
         var ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Toronto',
           'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'UTC'];
 
@@ -352,6 +368,7 @@
 
         // ---- channel editor ----
         function normalize(channel) {
+          channel.Kind = channel.Kind || 'Standard';
           channel.Sources = channel.Sources || [];
           channel.CommercialSources = channel.CommercialSources || [];
           channel.TimeSlots = channel.TimeSlots || [];
@@ -425,6 +442,21 @@
             checkbox(channel, 'AllowSpecials', 'Include specials (season 0)')
           ]));
           editor.appendChild(basics);
+
+          // Stream and weather channels have no sources, breaks or slots: just a URL or a place.
+          var kindCard = el('div', { className: 'ctv-card' }, [el('h4', { text: 'What it airs' })]);
+          var kindRow = el('div', { className: 'ctv-row' }, [field('Channel type', select(channel, 'Kind', KINDS, renderEditor))]);
+          if (channel.Kind === 'Stream') {
+            kindRow.appendChild(field('Stream URL', textInput(channel, 'StreamUrl', 'https://example.com/live/stream.m3u8'), true));
+          } else if (channel.Kind === 'Weather') {
+            kindRow.appendChild(field('Place (city name, or latitude,longitude)', textInput(channel, 'WeatherLocation', 'Chicago'), true));
+            kindRow.appendChild(checkbox(channel, 'WeatherMetric', 'Metric units (°C, km/h)'));
+          }
+          kindCard.appendChild(kindRow);
+          if (channel.Kind === 'Weather') {
+            kindCard.appendChild(el('p', { className: 'ctv-hint', text: 'Forecasts come from Open-Meteo (free, no key; the server needs internet access). The Cable TV app draws the weather; plain Live TV shows a forecast card.' }));
+          }
+          editor.appendChild(kindCard);
 
           var content = el('div', { className: 'ctv-card' }, [el('h4', { text: 'Content' }),
             el('p', { className: 'ctv-hint', text: 'The channel airs everything these sources match. Air hours limit a source to a time of day (restricted hours).' })]);
@@ -511,6 +543,38 @@
             daysPicker(channel.Premieres, 'Days')
           ]));
           editor.appendChild(premieres);
+
+          if (channel.Kind !== 'Standard') {
+            // Only the channel basics and what it airs apply.
+            Array.prototype.slice.call(editor.children, 2).forEach(function (card) { card.style.display = 'none'; });
+          }
+        }
+
+        // ---- content groups ----
+        function renderGroups() {
+          var box = page.querySelector('#Groups');
+          box.innerHTML = '';
+          state.config.ContentGroups.forEach(function (group, i) {
+            group.Sources = group.Sources || [];
+            var card = el('div', { className: 'ctv-card' });
+            card.appendChild(el('div', { className: 'ctv-row' }, [
+              field('Group name', textInput(group, 'Name', 'Saturday cartoons', refreshGroupNames), true),
+              button('Remove group', function () { state.config.ContentGroups.splice(i, 1); renderGroups(); refreshGroupNames(); }, true)
+            ]));
+            card.appendChild(sourceEditor(group.Sources, {}));
+            box.appendChild(card);
+          });
+          box.appendChild(button('Add content group', function () {
+            state.config.ContentGroups.push({ Name: 'Group ' + (state.config.ContentGroups.length + 1), Sources: [] });
+            renderGroups();
+            refreshGroupNames();
+          }));
+        }
+
+        function refreshGroupNames() {
+          var list = page.querySelector('#ctvGroups');
+          list.innerHTML = '';
+          state.config.ContentGroups.forEach(function (g) { list.appendChild(el('option', { value: g.Name })); });
         }
 
         function refreshJson() {
@@ -588,6 +652,11 @@
             page.querySelector('#TranscodeHeight').value = config.TranscodeHeight || 720;
             page.querySelector('#NormalizeLoudness').checked = config.NormalizeLoudness !== false;
             page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
+            page.querySelector('#ServiceName').value = config.ServiceName || '';
+            page.querySelector('#WebTvLink').href = ApiClient.getUrl('CableTv/Web');
+            config.ContentGroups = config.ContentGroups || [];
+            renderGroups();
+            refreshGroupNames();
             var global = page.querySelector('#GlobalCommercials');
             global.innerHTML = '';
             global.appendChild(sourceEditor(config.CommercialSources, { commercial: true }));
@@ -879,6 +948,8 @@
             config.TranscodeHeight = parseInt(page.querySelector('#TranscodeHeight').value, 10) || 720;
             config.NormalizeLoudness = page.querySelector('#NormalizeLoudness').checked;
             config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
+            config.ServiceName = page.querySelector('#ServiceName').value.trim() || 'Cable TV';
+            config.ContentGroups = state.config.ContentGroups;
             config.CommercialSources = state.config.CommercialSources;
             config.Channels = state.config.Channels;
             ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
