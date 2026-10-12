@@ -44,8 +44,9 @@ Open **Cable TV** in the dashboard sidebar (under Plugins), or **Dashboard → P
 - **Channels**: pick a channel on the left, edit it on the right. Sources use pickers for your libraries,
   collections and playlists, with genre suggestions.
 - **Add channels**: *Suggest channels* proposes one channel per TV network, TV and movie genre, decade and
-  collection, plus kids and holiday channels, counted from your library. *Quick channel* makes a channel from one
-  genre, network, collection, playlist, library, year range, tag, rating, title keyword or list of titles.
+  collection, plus kids and holiday channels, counted from your library, followed by the
+  [preset lineups](#preset-lineups) your library can fill. *Quick channel* makes a channel from one genre, network,
+  collection, playlist, library, year range, tag, rating, title keyword or list of titles.
 - **Preview** shows what the selected channel would air over the next 6 hours using the unsaved settings.
 - **Save** rebuilds the channels and refreshes the Live TV guide. The channels then appear under **Live TV**.
 - **Advanced** holds the same settings as JSON, plus the ids on your server.
@@ -64,6 +65,57 @@ Open **Cable TV** in the dashboard sidebar (under Plugins), or **Dashboard → P
   extras), optionally limited by genre in `Values`. Each slot carries the movie it belongs to, so clients can offer
   to tune to the channel airing it. *Suggest channels* proposes a "Coming Attractions" channel and one "Radio" channel
   per music genre.
+
+### Preset lineups
+
+*Suggest channels* also offers about 130 ready-made channels in 14 bundles (Retro, Kidz Zone, Prime Time, Marquee,
+Adventureland, Overtime, Case Files, Decades, Franchises, Arthouse, Networks, 'Tis the Season, Scream and High
+Rotation), converted from [Nostalgex](https://github.com/chadMueller/Nostalgex)'s channel lineup. A preset only shows
+up when your library has enough titles for it (3–5 shows or movies, or the minimum you set), with the count it would
+draw from. Tick channels, or *select all* for a whole bundle, then *Add selected channels* and save.
+
+Each preset is a `Rule` source (below), so it fills itself from your library as it changes: for example *90s
+Sitcoms* is comedy series from 1990–1999, *Westerns* is western movies, *HBO* is anything from HBO's studios plus a
+list of its shows, and *Christmas Specials* airs only episodes with holiday words in their names. Some presets also
+carry a curated list of titles by TMDB id (*Criterion*, *Anime*, *Stand-Up* rely on it), matched against the TMDB ids
+Jellyfin's metadata stores. Edit an added channel like any other.
+
+Presets work best with Jellyfin's TMDB metadata: genres, studios and networks come from it, and TMDB keywords become
+Jellyfin tags, which presets such as *Teen Movies* or *Foreign Films* use. Two Nostalgex channels (*Rewatchables*)
+need per-user watch counts and aren't included; IMDb vote-count minimums are dropped, and Jellyfin's community rating
+stands in for IMDb and Plex ratings.
+
+To refresh the presets from a newer Nostalgex: `python3 scripts/nostalgex_presets.py <nostalgex checkout>`.
+
+### Rule sources
+
+A `Rule` source is a smart filter over series, movies and music videos, set as JSON in `Rule`:
+
+```json
+{ "Type": "Rule", "Rule": { "Genres": ["Comedy"], "ExcludeGenres": ["Animation"], "YearFrom": 1990, "YearTo": 1999 } }
+```
+
+An item qualifies when every condition holds, except the content conditions (`Genres`, `Keywords`, `TitleWords`,
+`Studios`, `Companies`), where one match is enough. Text comparisons ignore case; genres, studios and companies match
+part of a value ("Comedy" matches "Romantic Comedy"), keywords match exactly, title words match whole words.
+
+| Field | Meaning |
+|---|---|
+| `Genres`, `RequireAllGenres`, `ExcludeGenres` | Any of, all of, none of these genres. |
+| `Keywords`, `ExcludeKeywords` | Tags (TMDB keywords) that qualify an item or rule it out. `KeywordGenres`: a keyword match also needs one of these genres. `KeywordGatedGenres`: these broad genres qualify only with a keyword match. |
+| `TitleWords`, `ExcludeTitleWords` | Words in the title. Without keywords, studios or companies, `TitleWords` is the whole list. |
+| `AlwaysTitles` | Exact titles that always qualify. |
+| `EpisodeWords` | Only episodes with these words in their names air. |
+| `Studios` | Studios; together with `Genres`, an item needs both. |
+| `Companies` | Networks or production companies (Jellyfin studios); a match qualifies on its own. |
+| `Ratings`, `AllowUnrated`, `ExcludeRatings` | Allowed official ratings, whether unrated items pass, and ratings ruled out. |
+| `YearFrom`, `YearTo` | Production years (items without a year pass). |
+| `MinRating` | Lowest community rating, 0–10 (unrated items fail). |
+| `MinMinutes`, `MaxMinutes` | Movie length. |
+| `AddedWithinDays`, `ReleasedWithinMonths` | Recently added or released. |
+| `Kids` | Rules out adult ratings, and allows animation under `LockGenres`. |
+| `LockGenres` | Horror, reality, animation, documentary, war, western and talk titles qualify only when `Genres` names them. |
+| `Members`, `MembersOnly` | Curated titles, `"movie:{tmdb id}"` or `"tv:{tmdb id}"`, which qualify unless the year, title or excluded-genre conditions rule them out; with `MembersOnly`, only these (and `AlwaysTitles`) qualify. |
 
 ### Content groups
 
@@ -138,7 +190,7 @@ The JSON form of a channel, for reference:
 |---|---|
 | `Id` | Stable id. It seeds the schedule, so changing it reshuffles the channel. |
 | `Kind` | `Standard` (default), `Stream` (with `StreamUrl`) or `Weather` (with `WeatherLocation`, `WeatherMetric`). |
-| `Sources` | Union of sources. `Library`, `Collection`, `Playlist`, `Items` take `Ids`. In `Values`: `Genre`, `Studio` (TV networks), `Tag`, `Rating` take names; `Decade` start years (`"1990"`); `Years` years or ranges (`"1985-1994"`); `Keyword` words in the title; `Titles` show or movie titles, optionally `"Title (Year)"`; `Episodes` `"Show :: Episode title"`; `Artist` artist names; `Trailers` movie trailers (optional genres); `Group` content group names. `Exclude: true` removes a source's items from the channel. `Weight` (1–10) airs a source's items more often under `Random`. |
+| `Sources` | Union of sources. `Library`, `Collection`, `Playlist`, `Items` take `Ids`. In `Values`: `Genre`, `Studio` (TV networks), `Tag`, `Rating` take names; `Decade` start years (`"1990"`); `Years` years or ranges (`"1985-1994"`); `Keyword` words in the title; `Titles` show or movie titles, optionally `"Title (Year)"`; `Episodes` `"Show :: Episode title"`; `Artist` artist names; `Trailers` movie trailers (optional genres); `Group` content group names; `Rule` a smart filter in `Rule` (see Rule sources). `Exclude: true` removes a source's items from the channel. `Weight` (1–10) airs a source's items more often under `Random`. |
 | `LogoUrl` | Image URL, `studio:Name`, or empty for automatic (see Logos). |
 | `Category` | Guide group, for example `Kids`; returned by the API. |
 | `Sorting` | `Random`, `Cyclic`, `RoundRobin` (one episode per series in turn), `Block` (`BlockSize` episodes per series), `Marathon` (whole series back to back, series order reshuffled each pass). |
@@ -184,6 +236,7 @@ The JSON form of a channel, for reference:
 | 5b. Lineups | Suggestions, quick channels, CSV/JSON import and export, title/network/tag/rating/year/keyword sources, logos | Done (0.4.x) |
 | 6. Presentation | Service name, weather channels, guide and overlay themes, theme editor and interface sounds (fork) | Done (0.5.0.0) |
 | 7. Extras | Trailer pools, music channels, content groups, stream channels, web TV mode | Done (0.5.0.0) |
+| 8. Presets | Rule sources, preset lineups from Nostalgex | Done (0.6.0.0) |
 
 Known limits:
 
@@ -218,7 +271,7 @@ src/Jellyfin.Plugin.CableTv/
   Scheduling/     Deterministic timeline engine: sorting, weights, blocks and breaks
   Library/        Library index and title matching
   Content/        Pool resolution, channel store, guide refresh
-  Packs/          CSV and JSON import/export, channel suggestions
+  Packs/          CSV and JSON import/export, channel suggestions, preset lineups
   Logos/          Channel logos (network images, logo packs, generated)
   Streaming/      Continuous MPEG-TS stream: ffmpeg arguments, per-channel broadcaster, commercial cache
   Weather/        Open-Meteo forecasts and the forecast card
@@ -229,7 +282,7 @@ src/Jellyfin.Plugin.CableTv/
   Configuration/  Settings model and dashboard page
 tests/            xUnit tests
 docs/             API contract
-scripts/          Packaging
+scripts/          Packaging, preset lineup conversion
 dist/             Plugin repository manifest (zips are attached to GitHub releases)
 images/           Catalog image and logo (PNG, with SVG sources)
 dev/              Local Jellyfin 12 test server
@@ -241,3 +294,8 @@ Generated logos use the [Oswald](https://fonts.google.com/specimen/Oswald) font,
 License (`src/Jellyfin.Plugin.CableTv/Logos/Oswald-OFL.txt`). The web TV page bundles
 [hls.js](https://github.com/video-dev/hls.js) (Apache License 2.0, `src/Jellyfin.Plugin.CableTv/Web/hls.js-LICENSE.txt`).
 Weather data by [Open-Meteo](https://open-meteo.com/) (CC BY 4.0).
+
+The preset lineups are converted from [Nostalgex](https://github.com/chadMueller/Nostalgex)'s channel definitions and
+TMDB membership list (MIT License, © 2024 Chad Mueller / Muell Haus Inc.,
+`src/Jellyfin.Plugin.CableTv/Packs/Presets/NOSTALGEX-LICENSE.txt`), and `Rule` sources follow the semantics of its
+channel filter. Channel names that carried the Nostalgex brand are renamed (for example "Retro LOL").

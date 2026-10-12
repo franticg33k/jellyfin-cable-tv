@@ -18,7 +18,7 @@ namespace Jellyfin.Plugin.CableTv.Packs;
 /// <summary>
 /// A channel the library could fill.
 /// </summary>
-/// <param name="Group">Networks, TV genres, Movie genres, Decades, Kids, Holidays or Collections.</param>
+/// <param name="Group">Networks, TV genres, Movie genres, Decades, Kids, Holidays, Collections, or a preset bundle.</param>
 /// <param name="Channel">The channel, ready to add.</param>
 /// <param name="Titles">How many shows or movies it would draw from.</param>
 /// <param name="Exists">Whether a channel with this id or name is already configured.</param>
@@ -26,11 +26,17 @@ public sealed record ChannelSuggestion(
     [property: JsonPropertyName("group")] string Group,
     [property: JsonPropertyName("channel")] ChannelDefinition Channel,
     [property: JsonPropertyName("titles")] int Titles,
-    [property: JsonPropertyName("exists")] bool Exists);
+    [property: JsonPropertyName("exists")] bool Exists)
+{
+    /// <summary>Gets a description of the group, for preset bundles.</summary>
+    [JsonPropertyName("groupDescription")]
+    public string? GroupDescription { get; init; }
+}
 
 /// <summary>
 /// Proposes channels from what the library holds: one per TV network, TV and movie genre, decade, and collection, plus
-/// kids and holiday channels. Everything is counted from the shared library index, so it is cheap to call.
+/// kids and holiday channels, and the preset lineups (<see cref="PresetCatalog"/>) the library can fill. Everything is
+/// counted from the shared library index, so it is cheap to call.
 /// </summary>
 public class ChannelSuggester
 {
@@ -66,6 +72,7 @@ public class ChannelSuggester
 
     private readonly ContentPoolResolver _resolver;
     private readonly ILibraryManager _libraryManager;
+    private readonly PresetCatalog _presets;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChannelSuggester"/> class.
@@ -73,9 +80,21 @@ public class ChannelSuggester
     /// <param name="resolver">Pool resolver.</param>
     /// <param name="libraryManager">Library manager.</param>
     public ChannelSuggester(ContentPoolResolver resolver, ILibraryManager libraryManager)
+        : this(resolver, libraryManager, PresetCatalog.Default)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ChannelSuggester"/> class.
+    /// </summary>
+    /// <param name="resolver">Pool resolver.</param>
+    /// <param name="libraryManager">Library manager.</param>
+    /// <param name="presets">Preset lineups.</param>
+    public ChannelSuggester(ContentPoolResolver resolver, ILibraryManager libraryManager, PresetCatalog presets)
     {
         _resolver = resolver;
         _libraryManager = libraryManager;
+        _presets = presets;
     }
 
     /// <summary>
@@ -96,17 +115,19 @@ public class ChannelSuggester
         var suggestedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         void Add(string group, string name, int from, int titles, Action<ChannelDefinition>? tweak, params ContentSource[] sources)
+            => AddAs(ChannelDefaults.IdFor(name), group, name, null, from, titles, tweak, sources);
+
+        void AddAs(string key, string group, string name, string? number, int from, int titles, Action<ChannelDefinition>? tweak, ContentSource[] sources, string? description = null)
         {
-            var id = ChannelDefaults.IdFor(name);
-            if (!suggestedIds.Add(id))
+            if (!suggestedIds.Add(key))
             {
                 return;
             }
 
-            var exists = ids.Contains(id) || names.Contains(name);
-            var channel = ChannelDefaults.Create(name, exists ? string.Empty : numbers.Take(null, from), config.CommercialSources.Length > 0, sources);
+            var exists = ids.Contains(ChannelDefaults.IdFor(name)) || names.Contains(name);
+            var channel = ChannelDefaults.Create(name, exists ? string.Empty : numbers.Take(number, from), config.CommercialSources.Length > 0, sources);
             tweak?.Invoke(channel);
-            suggestions.Add(new ChannelSuggestion(group, channel, titles, exists));
+            suggestions.Add(new ChannelSuggestion(group, channel, titles, exists) { GroupDescription = description });
         }
 
         static ContentSource Source(ContentSourceType type, params string[] values) => new() { Type = type, Values = values };
@@ -188,6 +209,36 @@ public class ChannelSuggester
             }, new ContentSource { Type = ContentSourceType.Trailers });
         }
 
+        // Counting every preset against the whole library is the expensive part, so it runs in parallel.
+        var now = DateTime.UtcNow;
+        var presets = _presets.Bundles
+            .SelectMany(b => b.Channels.Select(c => (Bundle: b, Preset: c)))
+            .AsParallel()
+            .AsOrdered()
+            .Select(p => (p.Bundle, p.Preset, Titles: PresetTitles(index, p.Preset, now)))
+            .ToList();
+        foreach (var (bundle, preset, titles) in presets)
+        {
+            if (titles < Math.Max(min, preset.MinItems))
+            {
+                continue;
+            }
+
+            AddAs("preset:" + bundle.Id + ":" + preset.Name, bundle.Name, preset.Name, preset.Number, 1000, titles, c =>
+            {
+                c.Category = bundle.Name;
+                c.ItemTypes = preset.ItemTypes.ToArray();
+                if (preset.MoviesOnly)
+                {
+                    c.Sorting = ChannelSorting.Random;
+                }
+                else if (preset.MusicVideosOnly)
+                {
+                    MusicVideoChannel(c);
+                }
+            }, preset.CopySources(), bundle.Description);
+        }
+
         foreach (var (collection, count) in Collections(min))
         {
             Add("Collections", collection.Name, 700, count, c =>
@@ -204,6 +255,33 @@ public class ChannelSuggester
     {
         channel.ItemTypes = ["Movie"];
         channel.Sorting = ChannelSorting.Random;
+    }
+
+    private static void MusicVideoChannel(ChannelDefinition channel)
+    {
+        channel.Sorting = ChannelSorting.Random;
+        channel.CommercialsEnabled = false;
+        channel.GridMinutes = 0;
+        channel.MidBreak = MidBreakMode.None;
+    }
+
+    /// <summary>
+    /// How many library titles a preset channel would draw from.
+    /// </summary>
+    private static int PresetTitles(LibraryIndex index, PresetChannel preset, DateTime now)
+    {
+        var kinds = preset.ItemTypes.Select(t => t.ToLowerInvariant() switch
+        {
+            "episode" => TitleKind.Series,
+            "movie" => TitleKind.Movie,
+            "musicvideo" => TitleKind.MusicVideo,
+            _ => TitleKind.Video,
+        }).ToHashSet();
+        var matchers = preset.Sources
+            .Where(s => s.Type == ContentSourceType.Rule && s.Rule is not null && !s.Exclude)
+            .Select(s => new RuleMatcher(s.Rule!, now))
+            .ToList();
+        return matchers.Count == 0 ? 0 : index.Titles.Count(t => kinds.Contains(t.Kind) && matchers.Any(m => m.Matches(t)));
     }
 
     private static IEnumerable<(string Name, int Count)> Top(IReadOnlyDictionary<string, List<IndexedTitle>> index, TitleKind kind, int min)

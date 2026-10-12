@@ -33,6 +33,7 @@
       #CableTvConfigPage .ctv-logo { height: 3em; max-width: 6em; object-fit: contain; border-radius: 4px; }
       #CableTvConfigPage .ctv-suggest { max-height: 26em; overflow: auto; margin: 0.4em 0; }
       #CableTvConfigPage .ctv-suggest h5 { margin: 0.7em 0 0.2em; }
+      #CableTvConfigPage .ctv-suggest h5 a { font-weight: normal; margin-left: 0.6em; color: inherit; opacity: 0.75; }
       #CableTvConfigPage .ctv-suggest label { display: block; margin: 0.15em 0; }
       #CableTvConfigPage .ctv-suggest label.exists { opacity: 0.5; }
     </style>
@@ -100,7 +101,7 @@
           <h3 class="sectionTitle">Add channels</h3>
           <div class="ctv-card">
             <h4>Suggestions from your library</h4>
-            <p class="ctv-hint">One channel per TV network, genre, decade and collection, plus kids and holiday channels, counted from what your library holds. Added channels appear in the list below; save to put them on air.</p>
+            <p class="ctv-hint">One channel per TV network, genre, decade and collection, plus kids and holiday channels, counted from what your library holds. Below those come ready-made lineups (from <a is="emby-linkbutton" class="button-link" href="https://github.com/chadMueller/Nostalgex" target="_blank" rel="noopener">Nostalgex</a>), grouped in bundles, shown when your library can fill them. Added channels appear in the list below; save to put them on air.</p>
             <div class="ctv-row">
               <label class="ctv-field"><span>At least this many shows or movies</span><input type="number" id="SuggestMin" min="2" max="50" value="3" /></label>
               <button type="button" class="ctv-btn" id="SuggestButton">Suggest channels</button>
@@ -215,8 +216,9 @@
           ['Library', 'Library'], ['Collection', 'Collection'], ['Playlist', 'Playlist'],
           ['Genre', 'Genres'], ['Studio', 'Networks / studios'], ['Titles', 'Titles'], ['Decade', 'Decades'], ['Years', 'Years'],
           ['Tag', 'Tags'], ['Rating', 'Ratings'], ['Keyword', 'Title keywords'], ['Episodes', 'Pinned episodes'], ['Items', 'Item ids'],
-          ['Trailers', 'Trailers'], ['Artist', 'Music artists'], ['Group', 'Content group']
+          ['Trailers', 'Trailers'], ['Artist', 'Music artists'], ['Group', 'Content group'], ['Rule', 'Rule (smart filter)']
         ];
+        var RULE_EXAMPLE = { Genres: ['Comedy'], ExcludeGenres: ['Animation'], YearFrom: 1990, YearTo: 1999 };
         var VALUE_FIELDS = {
           Genre: ['Genres', 'Comedy, Animation', 'ctvGenres'],
           Studio: ['Networks or studios (TV networks come from TMDB metadata)', 'NBC, Cartoon Network', 'ctvStudios'],
@@ -310,7 +312,10 @@
               source.Values = source.Values || [];
               if (source.Weight == null) { source.Weight = 1; }
               var row = el('div', { className: 'ctv-row' });
-              row.appendChild(field('Source', select(source, 'Type', SOURCE_TYPES, render)));
+              row.appendChild(field('Source', select(source, 'Type', SOURCE_TYPES, function () {
+                if (source.Type !== 'Rule') { source.Rule = null; }
+                render();
+              })));
               var type = source.Type || 'Library';
               if (type === 'Library' || type === 'Collection' || type === 'Playlist') {
                 var picker = el('select', {});
@@ -334,6 +339,8 @@
                 lines.value = source.Values.join('\n');
                 lines.addEventListener('input', function () { source.Values = splitLines(lines.value); source.Ids = []; });
                 row.appendChild(field(type === 'Titles' ? 'Shows and movies, one per line; add (year) to pick a version' : 'Episodes, one per line: Show :: Episode title', lines, true));
+              } else if (type === 'Rule') {
+                row.appendChild(ruleEditor(source));
               } else {
                 var spec = VALUE_FIELDS[type] || VALUE_FIELDS.Genre;
                 var values = el('input', { type: 'text', placeholder: spec[1], list: spec[2] });
@@ -365,6 +372,35 @@
 
           render();
           return wrap;
+        }
+
+        // A rule is edited as JSON. Curated member lists (from presets) can run to thousands of ids, so they are kept
+        // out of the text box and carried over unchanged.
+        function ruleEditor(source) {
+          source.Rule = source.Rule || JSON.parse(JSON.stringify(RULE_EXAMPLE));
+          var members = source.Rule.Members || [];
+          var shown = {};
+          Object.keys(source.Rule).forEach(function (k) {
+            var v = source.Rule[k];
+            if (k !== 'Members' && v != null && v !== false && !(Array.isArray(v) && !v.length)) { shown[k] = v; }
+          });
+          var text = JSON.stringify(shown, null, 1);
+          var box = el('textarea', { rows: String(Math.min(14, Math.max(4, text.split('\n').length))), spellcheck: 'false' });
+          box.value = text;
+          var status = el('span', { className: 'ctv-hint', text: members.length ? 'Plus ' + members.length + ' curated titles (kept as they are).' : '' });
+          box.addEventListener('input', function () {
+            try {
+              var parsed = JSON.parse(box.value || '{}');
+              if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { throw new Error('not an object'); }
+              if (members.length) { parsed.Members = members; }
+              source.Rule = parsed;
+              box.style.outline = '';
+            } catch (e) {
+              box.style.outline = '2px solid #c33';
+            }
+          });
+          var help = 'Smart filter (JSON). One match among Genres, Keywords, TitleWords, Studios or Companies is enough; every other condition must hold. All fields are listed in the README.';
+          return el('div', { className: 'ctv-field grow', style: 'flex-basis:100%' }, [el('span', { text: help }), box, status]);
         }
 
         function splitLines(text) {
@@ -813,12 +849,27 @@
             list.innerHTML = '';
             if (!r.length) { list.textContent = 'Nothing to suggest. Networks and genres come from your library metadata.'; return; }
             var group = null;
+            var section = null;
             r.forEach(function (sg, i) {
-              if (sg.group !== group) { group = sg.group; list.appendChild(el('h5', { text: group })); }
+              if (sg.group !== group) {
+                group = sg.group;
+                section = el('div', {});
+                var all = el('a', { href: '#', text: 'select all' });
+                (function (box) {
+                  all.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    box.querySelectorAll('input:not([disabled])').forEach(function (x) { x.checked = true; });
+                  });
+                })(section);
+                list.appendChild(el('h5', {}, [group + '  ', all]));
+                if (sg.groupDescription) { list.appendChild(el('div', { className: 'ctv-hint', text: sg.groupDescription })); }
+                list.appendChild(section);
+              }
               var input = el('input', { type: 'checkbox', 'data-index': String(i) });
               if (sg.exists) { input.disabled = true; }
-              var what = sg.channel.ItemTypes.length === 1 && sg.channel.ItemTypes[0] === 'Movie' ? ' movies' : ' titles';
-              list.appendChild(el('label', { className: sg.exists ? 'exists' : '' }, [input,
+              var only = sg.channel.ItemTypes.length === 1 ? sg.channel.ItemTypes[0] : '';
+              var what = only === 'Movie' ? ' movies' : only === 'MusicVideo' ? ' music videos' : only === 'Episode' ? ' shows' : ' titles';
+              section.appendChild(el('label', { className: sg.exists ? 'exists' : '' }, [input,
                 ' ' + (sg.channel.Number ? sg.channel.Number + '  ' : '') + sg.channel.Name + ' — ' + sg.titles + what + (sg.exists ? ' (already a channel)' : '')]));
             });
             page.querySelector('#SuggestActions').style.display = '';

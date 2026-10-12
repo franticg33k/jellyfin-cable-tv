@@ -324,6 +324,7 @@ public class ContentPoolResolver
                     Type = s.Type,
                     Ids = s.Ids,
                     Values = s.Values,
+                    Rule = s.Rule,
                     Weight = Math.Max(s.Weight, source.Weight),
                     AirHours = s.AirHours ?? source.AirHours,
                     Exclude = s.Exclude || source.Exclude,
@@ -529,13 +530,25 @@ public class ContentPoolResolver
                 Studios = item.Studios ?? [],
                 Tags = item.Tags ?? [],
                 OfficialRating = item.OfficialRating,
-                Artists = item is MusicAlbum album ? album.AlbumArtists.Concat(album.Artists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray() : [],
+                Artists = item switch
+                {
+                    MusicAlbum album => album.AlbumArtists.Concat(album.Artists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    MusicVideo video => video.Artists.ToArray(),
+                    _ => [],
+                },
+                CommunityRating = item.CommunityRating,
+                TmdbId = item.GetProviderId(MetadataProvider.Tmdb),
+                DateAdded = Utc(item is Series series ? series.DateLastMediaAdded ?? item.DateCreated : item.DateCreated),
+                PremiereDate = item.PremiereDate,
+                Minutes = item is Series || item.RunTimeTicks is not > 0 ? null : (int)(item.RunTimeTicks.Value / TimeSpan.TicksPerMinute),
             });
         }
 
         _logger.LogInformation("Indexed {Count} series and videos for Cable TV", titles.Count);
         return new LibraryIndex(titles);
     }
+
+    private static DateTime? Utc(DateTime value) => value == default ? null : DateTime.SpecifyKind(value, DateTimeKind.Utc);
 
     private IEnumerable<BaseItem> ResolveSource(ContentSource source, BaseItemKind[] kinds, ResolveContext context)
     {
@@ -586,6 +599,9 @@ public class ContentPoolResolver
             case ContentSourceType.Artist:
                 return FromIndex(context.Index.WithArtist(source.Values), kinds, context);
 
+            case ContentSourceType.Rule:
+                return FromRule(source.Rule, kinds, context);
+
             case ContentSourceType.Group:
                 // Expanded before resolving (ExpandGroups); a group nested too deep resolves to nothing.
                 return [];
@@ -612,6 +628,18 @@ public class ContentPoolResolver
             .Where(t => t.Kind == TitleKind.Series)
             .SelectMany(t => Children(t.Id, [BaseItemKind.Episode], context))
             .Where(e => TitleNormalizer.Key(e.Name ?? string.Empty) == episodeKey);
+    }
+
+    private IEnumerable<BaseItem> FromRule(ContentRule? rule, BaseItemKind[] kinds, ResolveContext context)
+    {
+        if (rule is null)
+        {
+            return [];
+        }
+
+        var matcher = new RuleMatcher(rule, DateTime.UtcNow);
+        var items = FromIndex(context.Index.Titles.Where(matcher.Matches), kinds, context);
+        return matcher.FiltersEpisodes ? items.Where(i => i is not Episode e || matcher.MatchesEpisode(e.Name)) : items;
     }
 
     private IEnumerable<BaseItem> FromIndex(IEnumerable<IndexedTitle> titles, BaseItemKind[] kinds, ResolveContext context)
