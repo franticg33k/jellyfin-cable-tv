@@ -86,4 +86,9 @@ public enum ContentSourceType
     /// Music by any artist in <see cref="ContentSource.Values"/>.
     /// </summary>
     Artist = 15,
+
+    /// <summary>
+    /// Series, movies and music videos matching the smart filter in <see cref="ContentSource.Rule"/>.
+    /// </summary>
+    Rule = 16,
 }

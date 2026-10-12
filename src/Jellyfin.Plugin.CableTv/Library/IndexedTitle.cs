@@ -46,4 +46,24 @@ public sealed record IndexedTitle(Guid Id, TitleKind Kind, string Name, int? Yea
 
     /// <summary>Gets the official rating, for example "TV-PG".</summary>
     public string? OfficialRating { get; init; }
+
+    /// <summary>Gets the community rating (0–10).</summary>
+    public float? CommunityRating { get; init; }
+
+    /// <summary>Gets the TMDB id.</summary>
+    public string? TmdbId { get; init; }
+
+    /// <summary>Gets when the title (for a series, its latest episode) was added to the library, in UTC.</summary>
+    public DateTime? DateAdded { get; init; }
+
+    /// <summary>Gets the release (premiere) date.</summary>
+    public DateTime? PremiereDate { get; init; }
+
+    /// <summary>Gets the running time in minutes, for movies and videos.</summary>
+    public int? Minutes { get; init; }
+
+    /// <summary>Gets the key curated member lists use: "movie:{tmdb id}" or "tv:{tmdb id}".</summary>
+    public string? MemberKey => string.IsNullOrEmpty(TmdbId)
+        ? null
+        : (Kind == TitleKind.Series ? "tv:" : "movie:") + TmdbId;
 }

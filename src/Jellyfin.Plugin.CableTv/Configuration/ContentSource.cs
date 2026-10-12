@@ -26,6 +26,11 @@ public class ContentSource
     public string[] Values { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the smart filter (<see cref="ContentSourceType.Rule"/> sources).
+    /// </summary>
+    public ContentRule? Rule { get; set; }
+
+    /// <summary>
     /// Gets or sets how many times each item from this source airs per cycle (1–10). Only <see cref="ChannelSorting.Random"/> honours it.
     /// </summary>
     public int Weight { get; set; } = 1;
