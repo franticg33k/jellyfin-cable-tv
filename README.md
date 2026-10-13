@@ -126,9 +126,17 @@ Changing a group changes every channel that uses it.
 ### Web TV
 
 Click the service name in Jellyfin web's menu (header or side menu; it appears once you have channels and opens in a
-new tab), **Open web TV** on the settings page, or go to `/CableTv/Web` on your server. It is a browser TV: sign in with your Jellyfin
-account, then channel up/down, number keys, a guide (G) and full screen (F). It plays the channels' Live TV streams
-with [hls.js](https://github.com/video-dev/hls.js), served by the plugin.
+new tab), **Open web TV** on the settings page, or go to `/CableTv/Web` on your server. It is a browser TV: sign in
+with your Jellyfin account and it plays the channels' Live TV streams with
+[hls.js](https://github.com/video-dev/hls.js), served by the plugin.
+
+- **Keyboard:** channel up/down, number keys, a guide (G), full screen (F), mute (M), `*` to favourite the channel.
+- **Touch and phones:** tap the picture for on-screen controls (channel up/down, guide, favourite, mute, full
+  screen), or swipe up and down on it to change channel. The layout and text sizes adapt to the screen.
+- **Guide:** a grid of every channel with a details bar for the highlighted programme and a *Watch* button. Pick a
+  group (*All channels*, *★ Favourites*, or one of the channel categories), move through time with the arrows or
+  *Now*, and tap a channel's ★ to favourite it. Favourites and mute are remembered in the browser. It shows four
+  half-hours on a desktop and two on a phone.
 
 ### Import and export
 
