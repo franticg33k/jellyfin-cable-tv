@@ -31,6 +31,10 @@ public sealed record ChannelSuggestion(
     /// <summary>Gets a description of the group, for preset bundles.</summary>
     [JsonPropertyName("groupDescription")]
     public string? GroupDescription { get; init; }
+
+    /// <summary>Gets a value indicating whether this is a preset lineup channel.</summary>
+    [JsonPropertyName("preset")]
+    public bool Preset { get; init; }
 }
 
 /// <summary>
@@ -127,7 +131,7 @@ public class ChannelSuggester
             var exists = ids.Contains(ChannelDefaults.IdFor(name)) || names.Contains(name);
             var channel = ChannelDefaults.Create(name, exists ? string.Empty : numbers.Take(number, from), config.CommercialSources.Length > 0, sources);
             tweak?.Invoke(channel);
-            suggestions.Add(new ChannelSuggestion(group, channel, titles, exists) { GroupDescription = description });
+            suggestions.Add(new ChannelSuggestion(group, channel, titles, exists) { GroupDescription = description, Preset = description is not null });
         }
 
         static ContentSource Source(ContentSourceType type, params string[] values) => new() { Type = type, Values = values };
@@ -248,7 +252,7 @@ public class ChannelSuggester
             }, new ContentSource { Type = ContentSourceType.Collection, Ids = [collection.Id] });
         }
 
-        return suggestions;
+        return SuggestionMerge.OneChannelPerName(suggestions);
     }
 
     private static void MovieChannel(ChannelDefinition channel)
