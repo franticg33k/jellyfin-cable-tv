@@ -220,4 +220,25 @@ public class RuleTests
         var christmas = Movie("A Christmas Story", 1983, "Comedy", "Family");
         Assert.False(Airs("Retro LOL", christmas));
     }
+
+    [Fact]
+    public void Suggestions_HaveOneChannelPerName_PresetsWin()
+    {
+        static ChannelSuggestion Suggest(string group, string name, bool preset)
+            => new(group, new ChannelDefinition { Name = name }, 5, false) { Preset = preset, GroupDescription = preset ? "bundle" : null };
+
+        var merged = SuggestionMerge.OneChannelPerName(
+        [
+            Suggest("TV genres", "Sitcoms", false),
+            Suggest("Networks", "Netflix", false),
+            Suggest("Networks", "NETFLIX", false),
+            Suggest("Prime Time", "Sitcoms", true),
+            Suggest("Networks (preset)", "Netflix", true),
+            Suggest("Movie genres", "Action Movies", false),
+        ]);
+
+        Assert.Equal(["Sitcoms", "Netflix", "Action Movies"], merged.Select(s => s.Channel.Name).OrderBy(n => n == "Action Movies" ? 2 : n == "Netflix" ? 1 : 0).ToArray());
+        Assert.All(merged.Where(s => s.Channel.Name != "Action Movies"), s => Assert.True(s.Preset));
+        Assert.Equal(merged.Count, merged.Select(s => ChannelDefaults.IdFor(s.Channel.Name)).Distinct().Count());
+    }
 }

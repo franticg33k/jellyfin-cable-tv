@@ -138,6 +138,7 @@
                 <button type="button" class="ctv-btn" id="AddChannel">Add</button>
                 <button type="button" class="ctv-btn" id="CopyChannel">Duplicate</button>
                 <button type="button" class="ctv-btn danger" id="DeleteChannel">Delete</button>
+                <button type="button" class="ctv-btn" id="RemoveDuplicates" title="Removes channels that share a name with another channel">Remove duplicates</button>
               </div>
               <pre id="ChannelSummary" class="ctv-pre"></pre>
             </div>
@@ -758,6 +759,34 @@
           renderEditor();
         });
 
+        // Channels with the same name: keep the one that has the most content settings (a preset's Rule sources over an
+        // old, simpler suggestion), else the first.
+        page.querySelector('#RemoveDuplicates').addEventListener('click', function () {
+          var groups = {};
+          state.config.Channels.forEach(function (c) {
+            var key = (c.Name || '').trim().toLowerCase();
+            (groups[key] = groups[key] || []).push(c);
+          });
+          var drop = [];
+          Object.keys(groups).forEach(function (key) {
+            var list = groups[key];
+            if (!key || list.length < 2) { return; }
+            var keep = list.reduce(function (best, c) {
+              var score = function (x) { return x.Sources.filter(function (src) { return src.Type === 'Rule'; }).length * 10 + x.Sources.length; };
+              return score(c) > score(best) ? c : best;
+            });
+            list.forEach(function (c) { if (c !== keep) { drop.push(c); } });
+          });
+          if (!drop.length) { showAdded(0); page.querySelector('#AddMessage').textContent = 'No channels share a name.'; return; }
+          var names = drop.map(function (c) { return (c.Number || '') + ' ' + c.Name; }).join(', ');
+          if (!window.confirm('Remove ' + drop.length + ' duplicate channel' + (drop.length === 1 ? '' : 's') + ' (' + names + ')? They are removed when you save.')) { return; }
+          state.config.Channels = state.config.Channels.filter(function (c) { return drop.indexOf(c) < 0; });
+          state.selected = 0;
+          renderList();
+          renderEditor();
+          renderTargets();
+        });
+
         page.querySelector('#Advanced').addEventListener('toggle', function () { if (this.open) { refreshJson(); } });
 
         page.querySelector('#ApplyJson').addEventListener('click', function () {
@@ -824,7 +853,12 @@
           var ids = {};
           state.config.Channels.forEach(function (c) { ids[c.Id] = true; });
           var added = 0;
+          var names = {};
+          state.config.Channels.forEach(function (c) { names[(c.Name || '').trim().toLowerCase()] = true; });
           channels.forEach(function (c) {
+            // A channel with this name is already on the list (a second one would be a duplicate).
+            if (names[(c.Name || '').trim().toLowerCase()]) { return; }
+            names[(c.Name || '').trim().toLowerCase()] = true;
             var id = c.Id;
             for (var n = 2; ids[id]; n++) { id = c.Id + '-' + n; }
             c.Id = id;
