@@ -200,10 +200,23 @@
     blocked = false; show($('card'), false); startPlayback();
     return true;
   }
+  // A problem retrying won't fix: say so once and stop tuning again and again.
+  function noSignalFinal(detail) {
+    stop(); closeLive(); setStatic(false);
+    card(channels[current], 'CAN\'T PLAY HERE', detail);
+  }
   function noSignal(detail) {
     stop(); closeLive(); setStatic(false);
     card(channels[current], 'NO SIGNAL', detail + ' Trying again shortly.');
     retryTimer = setTimeout(function () { tune(current); }, 10000);
+  }
+  // Jellyfin sends H.264 video and AAC audio. Some Chromium builds (Brave or Chromium from a Linux package, Snap or
+  // Flatpak, for example) ship without those codecs and can't play them, whatever the page does.
+  var CODEC_HELP = 'This browser can\'t play H.264/AAC video, which the stream uses. Try Firefox, Chrome or Edge, or a build of this browser with proprietary media codecs.';
+  function codecsSupported() {
+    if (video.canPlayType('application/vnd.apple.mpegurl')) return true;
+    var types = ['video/mp4; codecs="avc1.64001f,mp4a.40.2"', 'video/mp4; codecs="avc1.42E01E,mp4a.40.2"'];
+    return !!(window.MediaSource && types.some(function (t) { return MediaSource.isTypeSupported(t); }));
   }
   function playUrl(url) {
     stop();
@@ -212,7 +225,11 @@
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (!data.fatal) return;
         var status = data.response && data.response.code;
-        noSignal(status === 401 || status === 403 ? 'The server refused the stream (sign in again if this persists).' : 'The stream could not be played.');
+        var detail = [data.details, status ? 'HTTP ' + status : ''].filter(Boolean).join(', ');
+        console.warn('Cable TV playback error', data);
+        if (status === 401 || status === 403) noSignal('The server refused the stream (sign in again if this persists).');
+        else if (/codec|bufferAdd/i.test(String(data.details)) || !codecsSupported()) noSignal(CODEC_HELP + ' (' + detail + ')');
+        else noSignal('The stream could not be played (' + detail + ').');
       });
       hls.loadSource(url); hls.attachMedia(video);
     } else {
@@ -253,6 +270,7 @@
     var channel = channels[current], seq = ++tuneSeq;
     show($('card'), false); setStatic(true); stop(); closeLive();
     refreshNow(channel);
+    if (!codecsSupported()) { noSignalFinal(CODEC_HELP); return; }
     if (!channel.liveTvId) { noSignal('This channel isn\'t in Live TV yet: run "Refresh Guide" in Scheduled Tasks.'); return; }
     var q = 'UserId=' + userId + '&IsPlayback=true&AutoOpenLiveStream=true&StartTimeTicks=0&MaxStreamingBitrate=' + PROFILE.MaxStreamingBitrate;
     fetch(base + '/Items/' + channel.liveTvId + '/PlaybackInfo?' + q, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ DeviceProfile: PROFILE }) })
@@ -269,7 +287,7 @@
   video.addEventListener('playing', function () { setStatic(false); });
   video.addEventListener('waiting', function () { setStatic(true); });
   video.addEventListener('ended', function () { tune(current); });
-  video.addEventListener('error', function () { if (!hls) noSignal('The stream could not be played.'); });
+  video.addEventListener('error', function () { if (!hls) noSignal('The stream could not be played' + (video.error && video.error.message ? ' (' + video.error.message + ')' : '') + '.'); });
   window.addEventListener('pagehide', closeLive);
   // The stream plays on through breaks and programmes; only the banner's "now playing" needs refreshing.
   setInterval(function () { if (now && nowMs() >= Date.parse(now.end)) { now = null; refreshNow(channels[current]); } }, 1000);
