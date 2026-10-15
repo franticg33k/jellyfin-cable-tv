@@ -424,8 +424,16 @@ public class ContentPoolResolver
             Height = videoStream?.Height,
             HasAudio = streams.Any(s => s.Type == MediaStreamType.Audio),
             Subtitles = SubtitleTracks(streams),
+            AudioTracks = AudioTracks(streams),
         };
     }
+
+    private static AudioTrack[] AudioTracks(IReadOnlyList<MediaStream> streams)
+        => streams
+            .Where(s => s.Type == MediaStreamType.Audio && !s.IsExternal)
+            .OrderBy(s => s.Index)
+            .Select((s, position) => new AudioTrack(position, s.Language, s.IsDefault))
+            .ToArray();
 
     private static SubtitleTrack[] SubtitleTracks(IReadOnlyList<MediaStream> streams)
     {

@@ -231,6 +231,10 @@ The JSON form of a channel, for reference:
 - *Auto* (default) copies video from items in the channel's main codec and resolution and transcodes the rest.
 - *Copy* never transcodes video. *Transcode* always makes H.264 at the chosen height.
 - Audio is always converted to AAC stereo, optionally with loudness levelling.
+- **Audio language** (`AudioLanguage`, empty by default) picks which audio track of each file the stream carries
+  (`jpn`, `eng`, `ja`, `en`…). A file with no track in that language, or with no language set, streams its default
+  track (the one the file flags, else the first). Use it so foreign films and anime play in the original language, or
+  in your own. Web TV and every Live TV client get that track; the Cable TV app picks tracks itself.
 - **Burn in subtitles** (off by default) draws the preferred-language subtitle track into the picture, so Live TV
   clients and the web TV page show subtitles. It works with text subtitles (SRT, ASS, WebVTT; embedded or external)
   and image subtitles (PGS, DVD, DVB). Programmes with a matching track are transcoded, so it costs CPU. Each channel

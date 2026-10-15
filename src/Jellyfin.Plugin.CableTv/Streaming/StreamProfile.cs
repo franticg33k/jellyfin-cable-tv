@@ -22,6 +22,9 @@ public sealed record StreamProfile(FallbackStreamMode Mode, string VideoCodec, i
     /// <summary>Gets the subtitle language to burn in; empty for each item's default track.</summary>
     public string SubtitleLanguage { get; init; } = string.Empty;
 
+    /// <summary>Gets the audio language to stream; empty for each item's default track.</summary>
+    public string AudioLanguage { get; init; } = string.Empty;
+
     /// <summary>Codecs the stream can encode to.</summary>
     private static readonly string[] EncodableCodecs = ["h264", "hevc"];
 

@@ -69,6 +69,11 @@ public sealed record PoolItem(Guid ItemId, string MediaSourceId, long DurationTi
     /// <summary>Gets the item's subtitle tracks, for burning into the Live TV stream.</summary>
     public IReadOnlyList<SubtitleTrack> Subtitles { get; init; } = [];
 
+    /// <summary>
+    /// Gets the item's audio tracks, so the stream can carry the one in the wanted language.
+    /// </summary>
+    public IReadOnlyList<AudioTrack> AudioTracks { get; init; } = [];
+
     /// <summary>Gets a value indicating whether the item is music (no video of its own).</summary>
     public bool IsAudio { get; init; }
 
