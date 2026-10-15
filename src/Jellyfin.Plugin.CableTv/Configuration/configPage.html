@@ -7,99 +7,130 @@
 <body>
   <div id="CableTvConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
     <style>
-      #CableTvConfigPage .ctv-row { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: flex-end; margin: 0.4em 0; }
-      #CableTvConfigPage .ctv-field { display: flex; flex-direction: column; gap: 0.2em; min-width: 7em; }
-      #CableTvConfigPage .ctv-field.grow { flex: 1 1 14em; }
-      #CableTvConfigPage .ctv-field > span, #CableTvConfigPage .ctv-hint { font-size: 0.85em; opacity: 0.75; }
+      #CableTvConfigPage { --ctv-line: rgba(255,255,255,0.14); --ctv-soft: rgba(255,255,255,0.06); --ctv-accent: #00a4dc; }
+      #CableTvConfigPage .ctv-intro { max-width: 60em; }
+      #CableTvConfigPage .ctv-hint { font-size: 0.85em; opacity: 0.75; margin: 0.3em 0 0.6em; line-height: 1.45; max-width: 60em; }
+      #CableTvConfigPage .ctv-h { font-size: 1.15em; margin: 0 0 0.5em; font-weight: 500; }
+
+      /* tabs */
+      #CableTvConfigPage .ctv-tabs { display: flex; flex-wrap: wrap; gap: 0.2em; border-bottom: 1px solid var(--ctv-line); margin: 0.8em 0 1.2em; }
+      #CableTvConfigPage .ctv-tab { background: none; color: inherit; border: 0; border-bottom: 3px solid transparent; padding: 0.7em 1.1em; font: inherit; cursor: pointer; opacity: 0.7; border-radius: 4px 4px 0 0; }
+      #CableTvConfigPage .ctv-tab:hover { opacity: 1; background: var(--ctv-soft); }
+      #CableTvConfigPage .ctv-tab.active { opacity: 1; border-bottom-color: var(--ctv-accent); font-weight: 600; }
+      #CableTvConfigPage .ctv-panel { display: none; }
+      #CableTvConfigPage .ctv-panel.active { display: block; }
+      #CableTvConfigPage .ctv-section { border: 1px solid var(--ctv-line); border-radius: 8px; padding: 1em 1.2em 0.6em; margin: 0 0 1.2em; }
+
+      /* form fields */
+      #CableTvConfigPage .ctv-row { display: flex; flex-wrap: wrap; gap: 0.8em 1em; align-items: flex-end; margin: 0.5em 0; }
+      #CableTvConfigPage .ctv-field { display: flex; flex-direction: column; gap: 0.3em; min-width: 9em; }
+      #CableTvConfigPage .ctv-field.grow { flex: 1 1 16em; }
+      #CableTvConfigPage .ctv-field > span { font-size: 0.82em; opacity: 0.8; line-height: 1.3; }
+      #CableTvConfigPage .ctv-check { display: inline-flex; align-items: center; gap: 0.45em; padding: 0.5em 0; cursor: pointer; }
       #CableTvConfigPage input[type=text], #CableTvConfigPage input[type=number], #CableTvConfigPage input[type=time], #CableTvConfigPage select, #CableTvConfigPage textarea {
-        background: rgba(255,255,255,0.08); color: inherit; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
-        padding: 0.45em 0.55em; font: inherit; box-sizing: border-box;
+        background: rgba(255,255,255,0.08); color: inherit; border: 1px solid var(--ctv-line); border-radius: 6px;
+        padding: 0.5em 0.65em; font: inherit; box-sizing: border-box; min-height: 2.5em; max-width: 100%;
       }
+      #CableTvConfigPage .ctv-field input[type=text], #CableTvConfigPage .ctv-field select { width: 100%; }
+      #CableTvConfigPage input:focus, #CableTvConfigPage select:focus, #CableTvConfigPage textarea:focus { outline: 2px solid var(--ctv-accent); outline-offset: 0; }
       #CableTvConfigPage textarea { width: 100%; font-family: monospace; font-size: 0.85em; }
-      #CableTvConfigPage .ctv-card { border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 0.6em 0.9em; margin: 0.6em 0; }
-      #CableTvConfigPage .ctv-card > h4 { margin: 0.2em 0 0.4em; }
-      #CableTvConfigPage .ctv-btn { background: rgba(255,255,255,0.1); color: inherit; border: 0; border-radius: 4px; padding: 0.45em 0.9em; cursor: pointer; font: inherit; }
+
+      /* cards and collapsible sections */
+      #CableTvConfigPage .ctv-card { border: 1px solid var(--ctv-line); border-radius: 8px; padding: 0.8em 1.1em; margin: 0 0 0.9em; background: var(--ctv-soft); }
+      #CableTvConfigPage .ctv-card > h4, #CableTvConfigPage .ctv-card > summary { margin: 0.1em 0 0.5em; font-size: 1em; font-weight: 600; }
+      #CableTvConfigPage details.ctv-card > summary { cursor: pointer; margin: 0; padding: 0.15em 0; list-style-position: inside; }
+      #CableTvConfigPage details.ctv-card[open] > summary { margin-bottom: 0.6em; }
+      #CableTvConfigPage .ctv-card .ctv-card { background: transparent; }
+      #CableTvConfigPage .ctv-sub { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.65; margin: 1em 0 0.2em; }
+      #CableTvConfigPage .ctv-empty { text-align: center; padding: 1.6em; }
+
+      /* chips: item kinds, days */
+      #CableTvConfigPage .ctv-days { display: flex; flex-wrap: wrap; gap: 0.4em; }
+      #CableTvConfigPage .ctv-days label { display: inline-flex; align-items: center; gap: 0.35em; border: 1px solid var(--ctv-line); border-radius: 999px; padding: 0.3em 0.85em; cursor: pointer; white-space: nowrap; margin: 0; }
+      #CableTvConfigPage .ctv-days label:has(input:checked) { background: rgba(0,164,220,0.22); border-color: var(--ctv-accent); }
+
+      /* buttons */
+      #CableTvConfigPage .ctv-btn { background: rgba(255,255,255,0.1); color: inherit; border: 0; border-radius: 6px; padding: 0.55em 1.05em; cursor: pointer; font: inherit; min-height: 2.5em; }
       #CableTvConfigPage .ctv-btn:hover { background: rgba(255,255,255,0.18); }
+      #CableTvConfigPage .ctv-btn.primary { background: var(--ctv-accent); color: #fff; }
       #CableTvConfigPage .ctv-btn.danger { color: #ef9a9a; }
-      #CableTvConfigPage .ctv-days label { margin-right: 0.6em; white-space: nowrap; }
+
+      /* channels: list and editor */
       #CableTvConfigPage .ctv-layout { display: flex; gap: 1.2em; flex-wrap: wrap; align-items: flex-start; }
-      #CableTvConfigPage .ctv-list { flex: 0 0 15em; }
-      #CableTvConfigPage .ctv-list select { width: 100%; min-height: 12em; }
-      #CableTvConfigPage .ctv-editor { flex: 1 1 30em; min-width: 0; }
+      #CableTvConfigPage .ctv-list { flex: 0 0 16em; max-width: 100%; position: sticky; top: 4.5em; }
+      #CableTvConfigPage .ctv-list select { width: 100%; min-height: 16em; padding: 0.3em; }
+      #CableTvConfigPage .ctv-list option { padding: 0.35em 0.5em; border-radius: 4px; }
+      #CableTvConfigPage .ctv-editor { flex: 1 1 32em; min-width: 0; }
       #CableTvConfigPage .ctv-pre { white-space: pre-wrap; font-family: monospace; font-size: 0.85em; opacity: 0.85; margin: 0.5em 0 1em; }
-      #CableTvConfigPage details > summary { cursor: pointer; margin: 0.6em 0; }
       #CableTvConfigPage .ctv-error { color: #ef9a9a; }
-      #CableTvConfigPage .ctv-ok { color: #a5d6a7; }
+      #CableTvConfigPage .ctv-ok { color: #a5d6a7; margin: 0.4em 0; }
       #CableTvConfigPage .ctv-logo { height: 3em; max-width: 6em; object-fit: contain; border-radius: 4px; }
-      #CableTvConfigPage .ctv-suggest { max-height: 26em; overflow: auto; margin: 0.4em 0; }
-      #CableTvConfigPage .ctv-suggest h5 { margin: 0.7em 0 0.2em; }
+      #CableTvConfigPage .ctv-suggest { max-height: 30em; overflow: auto; margin: 0.4em 0; }
+      #CableTvConfigPage .ctv-suggest h5 { margin: 0.9em 0 0.2em; font-size: 1em; }
       #CableTvConfigPage .ctv-suggest h5 a { font-weight: normal; margin-left: 0.6em; color: inherit; opacity: 0.75; }
-      #CableTvConfigPage .ctv-suggest label { display: block; margin: 0.15em 0; }
+      #CableTvConfigPage .ctv-suggest label { display: block; margin: 0.2em 0; }
       #CableTvConfigPage .ctv-suggest label.exists { opacity: 0.5; }
+
+      /* sticky save bar */
+      #CableTvConfigPage .ctv-savebar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 0.8em; align-items: center; justify-content: flex-end;
+        margin: 1.5em -0.5em 0; padding: 0.8em 1em; background: rgba(24,24,24,0.96); border-top: 1px solid var(--ctv-line); backdrop-filter: blur(4px); }
+      #CableTvConfigPage .ctv-savebar .ctv-error { flex: 1 1 auto; text-align: left; }
+      #CableTvConfigPage .ctv-savebar button[type=submit] { min-width: 9em; margin: 0; }
+
+      @media (max-width: 700px) {
+        #CableTvConfigPage .ctv-list { position: static; flex-basis: 100%; }
+        #CableTvConfigPage .ctv-tab { padding: 0.6em 0.8em; }
+        #CableTvConfigPage .ctv-field { min-width: 100%; }
+      }
     </style>
     <div data-role="content">
       <div class="content-primary">
         <h2 class="sectionTitle">Cable TV</h2>
-        <p>Channels built from your library, on a schedule that is the same on every device. They appear under Live TV once saved; how many days of listings apps show is set in Jellyfin's own Live TV settings.</p>
+        <p class="ctv-hint ctv-intro">Channels built from your library, on a schedule that is the same on every device. They appear under Live TV once saved; how many days of listings apps show is set in Jellyfin's own Live TV settings.</p>
+
+        <div class="ctv-tabs" role="tablist">
+          <button type="button" class="ctv-tab" role="tab" data-tab="channels">Channels</button>
+          <button type="button" class="ctv-tab" role="tab" data-tab="add">Add channels</button>
+          <button type="button" class="ctv-tab" role="tab" data-tab="settings">Settings</button>
+          <button type="button" class="ctv-tab" role="tab" data-tab="io">Import / export</button>
+          <button type="button" class="ctv-tab" role="tab" data-tab="advanced">Advanced</button>
+        </div>
 
         <form id="CableTvConfigForm">
-          <h3 class="sectionTitle">General</h3>
-          <div class="ctv-row">
-            <label class="ctv-field grow"><span>Time zone for time slots, restricted hours, seasons and premieres</span>
-              <input type="text" id="TimeZone" list="ctvZones" placeholder="Server's time zone (e.g. America/New_York)" />
-            </label>
-            <label class="ctv-field grow"><span>Schedule anchor (UTC). Changing it reshuffles every channel.</span>
-              <input type="text" id="ScheduleAnchorUtc" placeholder="2026-01-01T00:00:00Z" />
-            </label>
+          <section class="ctv-panel" data-panel="channels">
+            <div id="EmptyHint" class="ctv-card ctv-empty" style="display:none">
+              <h4>No channels yet</h4>
+              <p class="ctv-hint">Start from your library's suggestions or the ready-made lineups, or make one by hand.</p>
+              <button type="button" class="ctv-btn primary" data-go="add">Add channels</button>
+              <button type="button" class="ctv-btn" id="AddFirstChannel">Make a blank channel</button>
+            </div>
+            
+          <div class="ctv-layout">
+            <div class="ctv-list">
+              <select id="ChannelList" size="10"></select>
+              <div class="ctv-row">
+                <button type="button" class="ctv-btn" id="AddChannel">Add</button>
+                <button type="button" class="ctv-btn" id="CopyChannel">Duplicate</button>
+                <button type="button" class="ctv-btn danger" id="DeleteChannel">Delete</button>
+                <button type="button" class="ctv-btn" id="RemoveDuplicates" title="Removes channels that share a name with another channel">Remove duplicates</button>
+              </div>
+              <pre id="ChannelSummary" class="ctv-pre"></pre>
+            </div>
+            <div class="ctv-editor" id="ChannelEditor"></div>
           </div>
-          <div class="ctv-row">
-            <label class="ctv-field grow"><span>Logo pack URL (optional). Channels without their own logo use {URL}/{channel_name}.png, e.g. …/cartoon_network.png</span>
-              <input type="text" id="LogoBaseUrl" placeholder="https://example.com/logos" />
-            </label>
-          </div>
-          <datalist id="ctvZones"></datalist>
-          <div class="ctv-row">
-            <label class="ctv-field grow"><span>Service name: shown in the TV guide, on the web TV page and in the menu</span>
-              <input type="text" id="ServiceName" placeholder="Cable TV" />
-            </label>
-            <a class="ctv-btn" id="WebTvLink" href="#" target="_blank" rel="noopener">Open web TV</a>
-          </div>
-          <div class="ctv-row">
-            <label class="ctv-field"><span><input type="checkbox" id="ShowInWebMenu" /> Show the service in Jellyfin's side menu (opens the web TV page)</span></label>
-          </div>
-          <p class="ctv-hint">The web TV page plays your channels in the browser. The menu link appears for everyone once there are channels; reload Jellyfin's web app after changing this.</p>
-          <datalist id="ctvStudios"></datalist>
-          <datalist id="ctvGroups"></datalist>
 
-          <h3 class="sectionTitle">Live TV stream</h3>
-          <div class="ctv-row">
-            <label class="ctv-field grow"><span>Stream mode (audio is always converted to AAC stereo)</span>
-              <select id="FallbackMode">
-                <option value="Auto">Auto: copy video in the channel's main format, transcode the rest</option>
-                <option value="Copy">Copy: never transcode video (cheapest)</option>
-                <option value="Transcode">Transcode: always H.264 at a fixed size (most compatible)</option>
-                <option value="Off">Off: play the airing file from its start</option>
-              </select>
-            </label>
-            <label class="ctv-field"><span>Transcode height</span><input type="number" id="TranscodeHeight" min="240" max="2160" /></label>
-            <label class="ctv-field"><span>&nbsp;</span><span><input type="checkbox" id="NormalizeLoudness" /> Level loudness</span></label>
-          </div>
-          <div class="ctv-row">
-            <label class="ctv-field"><span>&nbsp;</span><span><input type="checkbox" id="BurnInSubtitles" /> Burn in subtitles</span></label>
-            <label class="ctv-field"><span>Subtitle language (eng, spa, ... or empty for each file's default)</span><input type="text" id="SubtitleLanguage" placeholder="eng" /></label>
-            <label class="ctv-field"><span>Audio language (jpn, eng, ... or empty for each file's default track)</span><input type="text" id="AudioLanguage" placeholder="default" /></label>
-          </div>
-          <p class="ctv-hint">Burned-in subtitles show in every Live TV client and the web TV page. Programmes with a matching subtitle track are transcoded, which costs CPU. Channels can override this. The Cable TV app on your TV shows subtitles itself and doesn't need it.</p>
+          
+            <h3 class="ctv-h">Preview</h3>
+        <p class="ctv-hint">What the selected channel would air over the next 6 hours with the settings above, before you save.</p>
+        <button type="button" class="ctv-btn" id="PreviewButton">Preview selected channel</button>
+        <pre id="PreviewResult" class="ctv-pre"></pre>
 
-          <h3 class="sectionTitle">Content groups</h3>
-          <p class="ctv-hint">Named sets of sources that several channels can share: add a <em>Content group</em> source to a channel to include one. Changing a group changes every channel that uses it.</p>
-          <div id="Groups"></div>
+        
+          </section>
 
-          <h3 class="sectionTitle">Commercials</h3>
-          <p class="ctv-hint">Used by channels with commercials on that don't list their own. A <em>Home videos</em> library of ads works well.</p>
-          <div id="GlobalCommercials"></div>
-
-          <h3 class="sectionTitle">Add channels</h3>
+          <section class="ctv-panel" data-panel="add">
+            <h3 class="ctv-h">Add channels</h3>
+            
           <div class="ctv-card">
             <h4>Suggestions from your library</h4>
             <p class="ctv-hint">One channel per TV network, genre, decade and collection, plus kids and holiday channels, counted from what your library holds. Below those come ready-made lineups (from <a is="emby-linkbutton" class="button-link" href="https://github.com/chadMueller/Nostalgex" target="_blank" rel="noopener">Nostalgex</a>), grouped in bundles, shown when your library can fill them. Added channels appear in the list below; save to put them on air.</p>
@@ -131,36 +162,77 @@
           </div>
           <div id="AddMessage" class="ctv-ok"></div>
 
-          <h3 class="sectionTitle">Channels</h3>
-          <div class="ctv-layout">
-            <div class="ctv-list">
-              <select id="ChannelList" size="10"></select>
-              <div class="ctv-row">
-                <button type="button" class="ctv-btn" id="AddChannel">Add</button>
-                <button type="button" class="ctv-btn" id="CopyChannel">Duplicate</button>
-                <button type="button" class="ctv-btn danger" id="DeleteChannel">Delete</button>
-                <button type="button" class="ctv-btn" id="RemoveDuplicates" title="Removes channels that share a name with another channel">Remove duplicates</button>
-              </div>
-              <pre id="ChannelSummary" class="ctv-pre"></pre>
-            </div>
-            <div class="ctv-editor" id="ChannelEditor"></div>
-          </div>
+          
+            <div class="ctv-row"><button type="button" class="ctv-btn" data-go="channels">Go to Channels &rarr;</button></div>
+          </section>
 
-          <div id="SaveError" class="ctv-error"></div>
+          <section class="ctv-panel" data-panel="settings">
+            <div class="ctv-section"><h3 class="ctv-h">General</h3>
           <div class="ctv-row">
-            <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
+            <label class="ctv-field grow"><span>Time zone for time slots, restricted hours, seasons and premieres</span>
+              <input type="text" id="TimeZone" list="ctvZones" placeholder="Server's time zone (e.g. America/New_York)" />
+            </label>
+            <label class="ctv-field grow"><span>Schedule anchor (UTC). Changing it reshuffles every channel.</span>
+              <input type="text" id="ScheduleAnchorUtc" placeholder="2026-01-01T00:00:00Z" />
+            </label>
           </div>
           <div class="ctv-row">
-            <button type="button" class="ctv-btn" id="RebuildNow">Rebuild channels from the library now</button>
+            <label class="ctv-field grow"><span>Logo pack URL (optional). Channels without their own logo use {URL}/{channel_name}.png, e.g. …/cartoon_network.png</span>
+              <input type="text" id="LogoBaseUrl" placeholder="https://example.com/logos" />
+            </label>
           </div>
-        </form>
+          <datalist id="ctvZones"></datalist>
+          <div class="ctv-row">
+            <label class="ctv-field grow"><span>Service name: shown in the TV guide, on the web TV page and in the menu</span>
+              <input type="text" id="ServiceName" placeholder="Cable TV" />
+            </label>
+            <a class="ctv-btn" id="WebTvLink" href="#" target="_blank" rel="noopener">Open web TV</a>
+          </div>
+          <div class="ctv-row">
+            <label class="ctv-check"><input type="checkbox" id="ShowInWebMenu" /> Show the service in Jellyfin's side menu (opens the web TV page)</label>
+          </div>
+          <p class="ctv-hint">The web TV page plays your channels in the browser. The menu link appears for everyone once there are channels; reload Jellyfin's web app after changing this.</p>
+          <datalist id="ctvStudios"></datalist>
+          <datalist id="ctvGroups"></datalist>
 
-        <h3 class="sectionTitle">Preview</h3>
-        <p class="ctv-hint">What the selected channel would air over the next 6 hours with the settings above, before you save.</p>
-        <button type="button" class="ctv-btn" id="PreviewButton">Preview selected channel</button>
-        <pre id="PreviewResult" class="ctv-pre"></pre>
+          </div>
+            <div class="ctv-section"><h3 class="ctv-h">Live TV stream</h3>
+          <div class="ctv-row">
+            <label class="ctv-field grow"><span>Stream mode (audio is always converted to AAC stereo)</span>
+              <select id="FallbackMode">
+                <option value="Auto">Auto: copy video in the channel's main format, transcode the rest</option>
+                <option value="Copy">Copy: never transcode video (cheapest)</option>
+                <option value="Transcode">Transcode: always H.264 at a fixed size (most compatible)</option>
+                <option value="Off">Off: play the airing file from its start</option>
+              </select>
+            </label>
+            <label class="ctv-field"><span>Transcode height</span><input type="number" id="TranscodeHeight" min="240" max="2160" /></label>
+          </div>
+          <div class="ctv-row">
+            <label class="ctv-check"><input type="checkbox" id="NormalizeLoudness" /> Level loudness</label>
+            <label class="ctv-check"><input type="checkbox" id="BurnInSubtitles" /> Burn in subtitles</label>
+          </div>
+          <div class="ctv-row">
+            <label class="ctv-field grow"><span>Subtitle language to burn in (eng, spa, ... or empty for each file's default)</span><input type="text" id="SubtitleLanguage" placeholder="eng" /></label>
+            <label class="ctv-field grow"><span>Audio language (jpn, eng, ... or empty for each file's default track)</span><input type="text" id="AudioLanguage" placeholder="default" /></label>
+          </div>
+          <p class="ctv-hint">Burned-in subtitles show in every Live TV client and the web TV page. Programmes with a matching subtitle track are transcoded, which costs CPU. Channels can override this. The Cable TV app on your TV shows subtitles itself and doesn't need it.</p>
 
-        <h3 class="sectionTitle">Import and export</h3>
+          </div>
+            <div class="ctv-section"><h3 class="ctv-h">Content groups</h3>
+          <p class="ctv-hint">Named sets of sources that several channels can share: add a <em>Content group</em> source to a channel to include one. Changing a group changes every channel that uses it.</p>
+          <div id="Groups"></div>
+
+          </div>
+            <div class="ctv-section"><h3 class="ctv-h">Commercials</h3>
+          <p class="ctv-hint">Used by channels with commercials on that don't list their own. A <em>Home videos</em> library of ads works well.</p>
+          <div id="GlobalCommercials"></div>
+
+          </div>
+          </section>
+
+          <section class="ctv-panel" data-panel="io">
+            <h3 class="ctv-h">Import and export</h3>
         <p class="ctv-hint">Import a lineup CSV (<code>Channel Number,Channel Name,Title,Release Year</code>, one row per show or movie), an episodes CSV (<code>Show Title,Episode Title</code>) for holiday specials, or a channel pack exported from this page. Titles are matched to your library by name; a year tells remakes apart. Check first to see what matches.</p>
         <div class="ctv-card">
           <div class="ctv-row">
@@ -194,14 +266,26 @@
         </div>
         <p class="ctv-hint">Exports cover the saved channels. A JSON pack keeps every setting and can be imported on another server; collections and libraries are found there by name.</p>
 
-        <details id="Advanced">
-          <summary>Advanced: edit channels as JSON</summary>
+        
+          </section>
+
+          <section class="ctv-panel" data-panel="advanced">
+            <div id="Advanced">
+          <h3 class="ctv-h">Edit channels as JSON</h3>
           <textarea id="ChannelsJson" rows="18" spellcheck="false"></textarea>
           <div id="JsonError" class="ctv-error"></div>
           <div class="ctv-row"><button type="button" class="ctv-btn" id="ApplyJson">Apply JSON to the form</button></div>
           <p class="ctv-hint">Ids on this server:</p>
           <pre id="IdLookup" class="ctv-pre"></pre>
-        </details>
+        </div>
+          </section>
+
+          <div class="ctv-savebar">
+            <div id="SaveError" class="ctv-error"></div>
+            <button is="emby-button" type="submit" class="raised button-submit emby-button"><span>Save</span></button>
+            <button type="button" class="ctv-btn" id="RebuildNow" title="Rebuild the channels and the Live TV guide from the library now">Rebuild channels now</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -240,6 +324,22 @@
         var ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Toronto',
           'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'UTC'];
 
+        // ---- tabs ----
+        var TABS = ['channels', 'add', 'settings', 'io', 'advanced'];
+        function showTab(name) {
+          if (TABS.indexOf(name) < 0) { name = 'channels'; }
+          page.querySelectorAll('.ctv-tab').forEach(function (t) { t.classList.toggle('active', t.getAttribute('data-tab') === name); t.setAttribute('aria-selected', String(t.getAttribute('data-tab') === name)); });
+          page.querySelectorAll('.ctv-panel').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-panel') === name); });
+          try { sessionStorage.setItem('cabletv_config_tab', name); } catch (e) { /* not remembered */ }
+          if (name === 'advanced' && state.config) { refreshJson(); }
+        }
+        page.querySelectorAll('.ctv-tab').forEach(function (t) { t.addEventListener('click', function () { showTab(t.getAttribute('data-tab')); }); });
+        page.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { showTab(b.getAttribute('data-go')); window.scrollTo(0, 0); }); });
+        // Enter in a field shouldn't save the whole page (the Save button does).
+        page.querySelector('#CableTvConfigForm').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'submit') { e.preventDefault(); }
+        });
+
         var state = { config: null, selected: 0, library: { Library: [], Collection: [], Playlist: [], genres: [] } };
 
         // ---- small DOM helpers ----
@@ -274,7 +374,7 @@
           var input = el('input', { type: 'checkbox' });
           input.checked = !!obj[key];
           input.addEventListener('change', function () { obj[key] = input.checked; if (onChange) { onChange(); } });
-          return el('label', {}, [input, ' ' + label]);
+          return el('label', { className: 'ctv-check' }, [input, ' ' + label]);
         }
 
         function select(obj, key, options, onChange) {
@@ -450,6 +550,9 @@
           });
           if (state.selected >= state.config.Channels.length) { state.selected = state.config.Channels.length - 1; }
           list.value = String(state.selected);
+          var none = state.config.Channels.length === 0;
+          page.querySelector('#EmptyHint').style.display = none ? '' : 'none';
+          page.querySelector('.ctv-layout').style.display = none ? 'none' : '';
         }
 
         function renderEditor() {
@@ -463,6 +566,16 @@
 
           normalize(channel);
           var basics = el('div', { className: 'ctv-card' }, [el('h4', { text: 'Channel' })]);
+          // Sections that are usually empty fold away; they open when the channel uses them.
+          var collapsible = function (title, open) {
+            // Open when the channel uses the section, or the last time the user opened or closed it.
+            var key = (channel.Id || '') + '|' + title;
+            state.open = state.open || {};
+            var d = el('details', { className: 'ctv-card' }, [el('summary', { text: title })]);
+            d.open = key in state.open ? state.open[key] : !!open;
+            d.addEventListener('toggle', function () { state.open[key] = d.open; });
+            return d;
+          };
           basics.appendChild(el('div', { className: 'ctv-row' }, [
             field('Number', textInput(channel, 'Number', '0412', renderList)),
             field('Name', textInput(channel, 'Name', '', renderList), true),
@@ -476,13 +589,15 @@
             field('Logo: an image URL, a file path on the server, studio:Network Name, or empty for the network logo or a generated one', textInput(channel, 'LogoUrl', 'automatic'), true),
             logo
           ]));
+          basics.appendChild(el('div', { className: 'ctv-sub', text: 'Logo options' }));
           basics.appendChild(el('div', { className: 'ctv-row' }, [
             checkbox(channel, 'LogoTransparent', 'Transparent background'),
             field('Background tolerance (1-100)', numberInput(channel, 'LogoTolerance', 1, 100)),
-            field('Logo size in its image (%)', numberInput(channel, 'LogoScale', 10, 100)),
+            field('Size in its image (%)', numberInput(channel, 'LogoScale', 10, 100)),
             field('Position', select(channel, 'LogoAlign', LOGO_ALIGNS))
           ]));
           basics.appendChild(el('div', { className: 'ctv-hint', text: 'Transparent background removes the plain colour around a logo (the white of a JPEG, say); raise the tolerance for a soft or noisy edge. Size and position apply when the size is below 100%. Save to see the logo change. A generated logo ignores these.' }));
+          basics.appendChild(el('div', { className: 'ctv-sub', text: 'Scheduling' }));
           var types = el('div', { className: 'ctv-days' });
           ITEM_TYPES.forEach(function (t) {
             var input = el('input', { type: 'checkbox' });
@@ -496,9 +611,11 @@
           blockSize.style.display = channel.Sorting === 'Block' ? '' : 'none';
           basics.appendChild(el('div', { className: 'ctv-row' }, [
             checkbox(channel, 'Enabled', 'Enabled', renderList),
-            field('Order', select(channel, 'Sorting', SORTINGS, function () { blockSize.style.display = channel.Sorting === 'Block' ? '' : 'none'; })),
-            blockSize,
-            field('Item kinds', types, true),
+            field('Order', select(channel, 'Sorting', SORTINGS, function () { blockSize.style.display = channel.Sorting === 'Block' ? '' : 'none'; }), true),
+            blockSize
+          ]));
+          basics.appendChild(el('div', { className: 'ctv-row' }, [
+            field('Item kinds the channel can air', types, true),
             checkbox(channel, 'AllowSpecials', 'Include specials (season 0)')
           ]));
           editor.appendChild(basics);
@@ -526,7 +643,7 @@
           content.appendChild(sourceEditor(channel.Sources, { airHours: true }));
           editor.appendChild(content);
 
-          var ads = el('div', { className: 'ctv-card' }, [el('h4', { text: 'Commercial breaks' })]);
+          var ads = collapsible('Commercial breaks', channel.CommercialsEnabled);
           var adBody = el('div', {});
           function renderAds() {
             adBody.style.display = channel.CommercialsEnabled ? '' : 'none';
@@ -543,8 +660,8 @@
           renderAds();
           editor.appendChild(ads);
 
-          var slots = el('div', { className: 'ctv-card' }, [el('h4', { text: 'Time slots' }),
-            el('p', { className: 'ctv-hint', text: 'Different content at set times, e.g. cartoons 07:00–10:00 on weekends. An end at or before the start runs past midnight. Programmes are fitted so slots start on time.' })]);
+          var slots = collapsible('Time slots', channel.TimeSlots.length > 0);
+          slots.appendChild(el('p', { className: 'ctv-hint', text: 'Different content at set times, e.g. cartoons 07:00–10:00 on weekends. An end at or before the start runs past midnight. Programmes are fitted so slots start on time.' }));
           var slotList = el('div', {});
           function renderSlots() {
             slotList.innerHTML = '';
@@ -571,8 +688,8 @@
           }));
           editor.appendChild(slots);
 
-          var seasons = el('div', { className: 'ctv-card' }, [el('h4', { text: 'Seasonal lineups' }),
-            el('p', { className: 'ctv-hint', text: 'Holiday or seasonal content between two dates (MM-dd, inclusive; may wrap the new year).' })]);
+          var seasons = collapsible('Seasonal lineups', channel.Seasons.length > 0);
+          seasons.appendChild(el('p', { className: 'ctv-hint', text: 'Holiday or seasonal content between two dates (MM-dd, inclusive; may wrap the new year).' }));
           var seasonList = el('div', {});
           function renderSeasons() {
             seasonList.innerHTML = '';
@@ -598,7 +715,7 @@
           }));
           editor.appendChild(seasons);
 
-          var premieres = el('div', { className: 'ctv-card' }, [el('h4', { text: 'Premieres' })]);
+          var premieres = collapsible('Premieres', channel.Premieres && channel.Premieres.Enabled);
           premieres.appendChild(checkbox(channel.Premieres, 'Enabled', 'Air newly added items at a fixed time, marked as new in the guide'));
           premieres.appendChild(el('div', { className: 'ctv-row' }, [
             field('Time', textInput(channel.Premieres, 'Time', '20:00')),
@@ -763,6 +880,8 @@
           renderList();
           renderEditor();
         });
+
+        page.querySelector('#AddFirstChannel').addEventListener('click', function () { page.querySelector('#AddChannel').click(); });
 
         page.querySelector('#DeleteChannel').addEventListener('click', function () {
           var current = state.config.Channels[state.selected];
@@ -1079,6 +1198,10 @@
           });
           return false;
         });
+
+        var firstTab = 'channels';
+        try { firstTab = sessionStorage.getItem('cabletv_config_tab') || 'channels'; } catch (e) { /* default */ }
+        showTab(firstTab);
       })();
     </script>
   </div>
