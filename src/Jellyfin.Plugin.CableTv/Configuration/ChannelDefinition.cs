@@ -24,7 +24,7 @@ public class ChannelDefinition
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the logo: an http(s) URL, the path of an image file on the server, "studio:Name" for the logo Jellyfin has for a studio or TV network, or empty
+    /// Gets or sets the logo: an http(s) URL, the path of an image file on the server, "upload:file" for an image uploaded in the settings, "studio:Name" for the logo Jellyfin has for a studio or TV network, or empty
     /// to choose automatically (logo pack, then a studio or network with the channel's name, then a generated logo).
     /// </summary>
     public string? LogoUrl { get; set; }
@@ -51,6 +51,28 @@ public class ChannelDefinition
     /// Gets or sets where the logo sits in its image when <see cref="LogoScale"/> is below 100.
     /// </summary>
     public LogoAlign LogoAlign { get; set; } = LogoAlign.Center;
+
+    /// <summary>
+    /// Gets or sets the look of the generated logo, drawn when the channel has no logo of its own.
+    /// <see cref="LogoStyle.Default"/> follows the plugin-wide setting.
+    /// </summary>
+    public LogoStyle GeneratedLogoStyle { get; set; }
+
+    /// <summary>
+    /// Gets or sets the text of the generated logo, such as a short form of a long name. Empty draws the channel name.
+    /// </summary>
+    public string? GeneratedLogoText { get; set; }
+
+    /// <summary>
+    /// Gets or sets the colour of the generated logo's plate or outline, as "#RRGGBB". Empty follows the plugin-wide
+    /// setting, then a colour chosen from the name.
+    /// </summary>
+    public string? GeneratedLogoColor { get; set; }
+
+    /// <summary>
+    /// Gets or sets the colour of the generated logo's text, as "#RRGGBB". Empty follows the plugin-wide setting.
+    /// </summary>
+    public string? GeneratedLogoTextColor { get; set; }
 
     /// <summary>
     /// Gets or sets the channel's category, used to group channels in guides (for example "Networks" or "Movies").

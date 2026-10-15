@@ -280,3 +280,9 @@ public sealed record SlotDto(
             slot.Item?.SeriesId?.ToString("N", CultureInfo.InvariantCulture));
     }
 }
+
+/// <summary>
+/// The result of uploading a channel logo.
+/// </summary>
+/// <param name="Value">What to set the channel's logo to.</param>
+public sealed record LogoUploadResponse(string Value);

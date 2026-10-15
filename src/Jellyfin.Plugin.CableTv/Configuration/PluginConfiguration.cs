@@ -82,6 +82,21 @@ public class PluginConfiguration : BasePluginConfiguration
     public string LogoBaseUrl { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets how generated logos look for channels that don't choose their own look.
+    /// </summary>
+    public LogoStyle GeneratedLogoStyle { get; set; }
+
+    /// <summary>
+    /// Gets or sets the plate colour ("#RRGGBB") of generated logos. Empty gives each channel a colour from its name.
+    /// </summary>
+    public string GeneratedLogoColor { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the text colour ("#RRGGBB") of generated logos. Empty is white on plates, the plate colour otherwise.
+    /// </summary>
+    public string GeneratedLogoTextColor { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the name clients brand the TV mode with.
     /// </summary>
     public string ServiceName { get; set; } = "Cable TV";
