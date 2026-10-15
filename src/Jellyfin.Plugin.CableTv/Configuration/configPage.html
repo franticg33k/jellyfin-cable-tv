@@ -232,6 +232,8 @@
           Artist: ['Artists (music)', 'Queen, ABBA', ''],
           Group: ['Content groups', 'Saturday cartoons', 'ctvGroups']
         };
+        var LOGO_ALIGNS = [['Center', 'Center'], ['Top', 'Top'], ['Bottom', 'Bottom'], ['Left', 'Left'], ['Right', 'Right'],
+          ['TopLeft', 'Top left'], ['TopRight', 'Top right'], ['BottomLeft', 'Bottom left'], ['BottomRight', 'Bottom right']];
         var KINDS = [['Standard', 'Library channel'], ['Stream', 'Outside stream (HLS or MPEG-TS URL)'], ['Weather', 'Local weather']];
         var ITEM_TYPES = ['Episode', 'Movie', 'MusicVideo', 'Video', 'Audio'];
         var ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Toronto',
@@ -416,6 +418,9 @@
         function normalize(channel) {
           channel.Kind = channel.Kind || 'Standard';
           channel.Subtitles = channel.Subtitles || 'Default';
+          if (channel.LogoTolerance == null) { channel.LogoTolerance = 24; }
+          if (channel.LogoScale == null) { channel.LogoScale = 100; }
+          channel.LogoAlign = channel.LogoAlign || 'Center';
           channel.Sources = channel.Sources || [];
           channel.CommercialSources = channel.CommercialSources || [];
           channel.TimeSlots = channel.TimeSlots || [];
@@ -467,9 +472,16 @@
           logo.onerror = function () { logo.style.display = 'none'; };
           logo.src = ApiClient.getUrl('CableTv/Logo/' + encodeURIComponent(channel.Id || 'none')) + '?t=' + Date.now();
           basics.appendChild(el('div', { className: 'ctv-row' }, [
-            field('Logo: an image URL, studio:Network Name, or empty for the network logo or a generated one', textInput(channel, 'LogoUrl', 'automatic'), true),
+            field('Logo: an image URL, a file path on the server, studio:Network Name, or empty for the network logo or a generated one', textInput(channel, 'LogoUrl', 'automatic'), true),
             logo
           ]));
+          basics.appendChild(el('div', { className: 'ctv-row' }, [
+            checkbox(channel, 'LogoTransparent', 'Transparent background'),
+            field('Background tolerance (1-100)', numberInput(channel, 'LogoTolerance', 1, 100)),
+            field('Logo size in its image (%)', numberInput(channel, 'LogoScale', 10, 100)),
+            field('Position', select(channel, 'LogoAlign', LOGO_ALIGNS))
+          ]));
+          basics.appendChild(el('div', { className: 'ctv-hint', text: 'Transparent background removes the plain colour around a logo (the white of a JPEG, say); raise the tolerance for a soft or noisy edge. Size and position apply when the size is below 100%. Save to see the logo change. A generated logo ignores these.' }));
           var types = el('div', { className: 'ctv-days' });
           ITEM_TYPES.forEach(function (t) {
             var input = el('input', { type: 'checkbox' });
