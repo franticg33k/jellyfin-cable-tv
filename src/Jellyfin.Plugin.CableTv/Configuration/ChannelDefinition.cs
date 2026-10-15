@@ -24,10 +24,33 @@ public class ChannelDefinition
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the logo: an http(s) URL, "studio:Name" for the logo Jellyfin has for a studio or TV network, or empty
+    /// Gets or sets the logo: an http(s) URL, the path of an image file on the server, "studio:Name" for the logo Jellyfin has for a studio or TV network, or empty
     /// to choose automatically (logo pack, then a studio or network with the channel's name, then a generated logo).
     /// </summary>
     public string? LogoUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the logo's plain background (the colour around its edges, such as the white
+    /// of a JPEG) is made transparent.
+    /// </summary>
+    public bool LogoTransparent { get; set; }
+
+    /// <summary>
+    /// Gets or sets how different from the background a colour may be, 0–100, and still count as background
+    /// (<see cref="LogoTransparent"/>). Raise it for a logo with a soft or noisy background.
+    /// </summary>
+    public int LogoTolerance { get; set; } = 24;
+
+    /// <summary>
+    /// Gets or sets how much of the logo image the logo fills, in percent (10–100). Below 100 the logo is smaller and
+    /// <see cref="LogoAlign"/> says where it sits.
+    /// </summary>
+    public int LogoScale { get; set; } = 100;
+
+    /// <summary>
+    /// Gets or sets where the logo sits in its image when <see cref="LogoScale"/> is below 100.
+    /// </summary>
+    public LogoAlign LogoAlign { get; set; } = LogoAlign.Center;
 
     /// <summary>
     /// Gets or sets the channel's category, used to group channels in guides (for example "Networks" or "Movies").
