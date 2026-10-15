@@ -61,7 +61,7 @@ public sealed record SubtitleTrack(int EmbeddedIndex, string? Codec, string? Lan
         return matching.FirstOrDefault(t => !t.IsForced) ?? matching.FirstOrDefault();
     }
 
-    private static HashSet<string> LanguageCodes(string language)
+    internal static HashSet<string> LanguageCodes(string language)
     {
         var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { language };
         try

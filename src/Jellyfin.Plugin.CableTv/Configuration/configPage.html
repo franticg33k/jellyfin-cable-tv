@@ -87,6 +87,7 @@
           <div class="ctv-row">
             <label class="ctv-field"><span>&nbsp;</span><span><input type="checkbox" id="BurnInSubtitles" /> Burn in subtitles</span></label>
             <label class="ctv-field"><span>Subtitle language (eng, spa, ... or empty for each file's default)</span><input type="text" id="SubtitleLanguage" placeholder="eng" /></label>
+            <label class="ctv-field"><span>Audio language (jpn, eng, ... or empty for each file's default track)</span><input type="text" id="AudioLanguage" placeholder="default" /></label>
           </div>
           <p class="ctv-hint">Burned-in subtitles show in every Live TV client and the web TV page. Programmes with a matching subtitle track are transcoded, which costs CPU. Channels can override this. The Cable TV app on your TV shows subtitles itself and doesn't need it.</p>
 
@@ -715,6 +716,7 @@
             page.querySelector('#NormalizeLoudness').checked = config.NormalizeLoudness !== false;
             page.querySelector('#BurnInSubtitles').checked = !!config.BurnInSubtitles;
             page.querySelector('#SubtitleLanguage').value = config.SubtitleLanguage || '';
+            page.querySelector('#AudioLanguage').value = config.AudioLanguage || '';
             page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
             page.querySelector('#ServiceName').value = config.ServiceName || '';
             page.querySelector('#ShowInWebMenu').checked = config.ShowInWebMenu !== false;
@@ -1062,6 +1064,7 @@
             config.NormalizeLoudness = page.querySelector('#NormalizeLoudness').checked;
             config.BurnInSubtitles = page.querySelector('#BurnInSubtitles').checked;
             config.SubtitleLanguage = page.querySelector('#SubtitleLanguage').value.trim();
+            config.AudioLanguage = page.querySelector('#AudioLanguage').value.trim();
             config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
             config.ServiceName = page.querySelector('#ServiceName').value.trim() || 'Cable TV';
             config.ShowInWebMenu = page.querySelector('#ShowInWebMenu').checked;

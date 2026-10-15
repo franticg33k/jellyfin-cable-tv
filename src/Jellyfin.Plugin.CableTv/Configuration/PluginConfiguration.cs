@@ -59,6 +59,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public string SubtitleLanguage { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the audio language the Live TV stream carries ("jpn", "en", ...); empty for each file's default track.
+    /// A file without a track in that language uses its default track.
+    /// </summary>
+    public string AudioLanguage { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets the secret the server's own ffmpeg uses to read channel streams. Generated on first start.
     /// </summary>
     public string StreamKey { get; set; } = string.Empty;

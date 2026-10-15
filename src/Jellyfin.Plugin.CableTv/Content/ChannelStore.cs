@@ -297,6 +297,7 @@ public class ChannelStore
                 _ => config.BurnInSubtitles,
             },
             SubtitleLanguage = config.SubtitleLanguage ?? string.Empty,
+            AudioLanguage = config.AudioLanguage ?? string.Empty,
         };
         return new ChannelSnapshot(definition, timeline, stream) { Commercials = commercials };
     }

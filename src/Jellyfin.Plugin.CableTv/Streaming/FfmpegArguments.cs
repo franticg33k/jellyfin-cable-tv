@@ -119,7 +119,7 @@ public static class FfmpegArguments
             args.AddRange(["-t", length, "-i", item.Path]);
             if (item.HasAudio)
             {
-                audioMap = "0:a:0";
+                audioMap = "0:a:" + AudioTrack.Pick(item.AudioTracks, profile.AudioLanguage).ToString(CultureInfo.InvariantCulture);
             }
             else
             {
