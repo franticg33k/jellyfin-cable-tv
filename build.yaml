@@ -1,7 +1,7 @@
 # Plugin manifest for jprm (Jellyfin plugin repository manager).
 name: "Cable TV"
 guid: "ddef6196-173c-4477-b5e8-72811d8d96e4"
-version: "0.9.0.0"
+version: "0.9.1.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 overview: "Scheduled, always-on channels built from your library"
@@ -14,6 +14,9 @@ owner: "franticg33k"
 artifacts:
   - "Jellyfin.Plugin.CableTv.dll"
 changelog: >
+  0.9.1.0: a friendlier settings page: tabs (Channels, Add channels, Settings, Import / export, Advanced), a Save bar
+  that stays on screen, item kinds and days as chips instead of overlapping checkboxes, rarely used channel sections
+  that fold away, an empty state for a new install, and a layout that works on a phone.
   0.9.0.0: an Audio language setting for the Live TV stream (and so web TV): each file streams its track in that
   language, or its default track (the flagged one, else the first) when it has none.
   0.8.0.0: channel logo options: a transparent background (removes the white box of a JPEG), the logo's size and its

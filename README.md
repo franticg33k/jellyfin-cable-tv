@@ -36,20 +36,23 @@ a new folder `<jellyfin config>/plugins/Cable TV_<version>/` (Docker: `/config/p
 
 ## Set up channels
 
-Open **Cable TV** in the dashboard sidebar (under Plugins), or **Dashboard → Plugins → Cable TV**. The page is a form:
+Open **Cable TV** in the dashboard sidebar (under Plugins), or **Dashboard → Plugins → Cable TV**. The page has five
+tabs (the last one you used is remembered) and a Save bar that stays at the bottom of the screen:
 
-- **General**: the service name shown in guides, on the web TV page and in Jellyfin's menu (default "Cable TV"),
-  whether that menu link is shown, and the time zone that time slots, restricted hours, seasons and premieres use.
-- **Live TV stream** and global **Commercials** sources.
 - **Channels**: pick a channel on the left, edit it on the right. Sources use pickers for your libraries,
-  collections and playlists, with genre suggestions.
+  collections and playlists, with genre suggestions. Commercial breaks, time slots, seasonal lineups and premieres
+  fold away until a channel uses them. **Preview** shows what the selected channel would air over the next 6 hours
+  using the unsaved settings.
 - **Add channels**: *Suggest channels* proposes one channel per TV network, TV and movie genre, decade and
   collection, plus kids and holiday channels, counted from your library, followed by the
   [preset lineups](#preset-lineups) your library can fill. *Quick channel* makes a channel from one genre, network,
   collection, playlist, library, year range, tag, rating, title keyword or list of titles.
-- **Preview** shows what the selected channel would air over the next 6 hours using the unsaved settings.
+- **Settings**: the service name shown in guides, on the web TV page and in Jellyfin's menu (default "Cable TV") and
+  whether that menu link is shown; the time zone that time slots, restricted hours, seasons and premieres use; the
+  **Live TV stream** (mode, subtitles, audio language); content groups; and the global commercial sources.
+- **Import / export**: lineups and channel packs (see below).
+- **Advanced**: the channels as JSON, plus the ids on your server.
 - **Save** rebuilds the channels and refreshes the Live TV guide. The channels then appear under **Live TV**.
-- **Advanced** holds the same settings as JSON, plus the ids on your server.
 
 ### Channel types
 
