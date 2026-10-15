@@ -65,6 +65,11 @@
       #CableTvConfigPage .ctv-error { color: #ef9a9a; }
       #CableTvConfigPage .ctv-ok { color: #a5d6a7; margin: 0.4em 0; }
       #CableTvConfigPage .ctv-logo { height: 3em; max-width: 6em; object-fit: contain; border-radius: 4px; }
+      #CableTvConfigPage .ctv-logo-preview { height: 5em; border-radius: 6px; flex: 0 0 auto; }
+      #CableTvConfigPage .ctv-colour { display: flex; gap: 0.4em; align-items: center; }
+      #CableTvConfigPage .ctv-colour input[type=text] { width: 7.5em; }
+      #CableTvConfigPage .ctv-colour input[type=color] { width: 2.6em; height: 2.2em; padding: 0; border: 0; background: none; }
+      #CableTvConfigPage .ctv-upload { display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; margin: 0.3em 0; }
       #CableTvConfigPage .ctv-suggest { max-height: 30em; overflow: auto; margin: 0.4em 0; }
       #CableTvConfigPage .ctv-suggest h5 { margin: 0.9em 0 0.2em; font-size: 1em; }
       #CableTvConfigPage .ctv-suggest h5 a { font-weight: normal; margin-left: 0.6em; color: inherit; opacity: 0.75; }
@@ -181,6 +186,9 @@
               <input type="text" id="LogoBaseUrl" placeholder="https://example.com/logos" />
             </label>
           </div>
+          <div class="ctv-sub">Generated logos</div>
+          <div class="ctv-hint">Channels with no logo of their own get a generated one. Set how they look by default; a channel can still choose its own.</div>
+          <div id="GlobalLogoLook"></div>
           <datalist id="ctvZones"></datalist>
           <div class="ctv-row">
             <label class="ctv-field grow"><span>Service name: shown in the TV guide, on the web TV page and in the menu</span>
@@ -385,6 +393,97 @@
           return input;
         }
 
+        function colorInput(obj, key, onChange) {
+          var valid = function (v) { return /^#[0-9a-f]{6}$/i.test(v); };
+          var text = el('input', { type: 'text', placeholder: 'automatic', maxlength: '7' });
+          var pick = el('input', { type: 'color' });
+          var clear = el('button', { type: 'button', className: 'raised', text: 'Auto' });
+          text.value = obj[key] || '';
+          if (valid(text.value)) { pick.value = text.value; }
+          text.addEventListener('input', function () {
+            obj[key] = text.value.trim();
+            if (valid(obj[key])) { pick.value = obj[key]; }
+            onChange();
+          });
+          pick.addEventListener('input', function () { obj[key] = pick.value.toUpperCase(); text.value = obj[key]; onChange(); });
+          clear.addEventListener('click', function () { obj[key] = ''; text.value = ''; onChange(); });
+          return el('div', { className: 'ctv-colour' }, [text, pick, clear]);
+        }
+
+        // How a generated logo looks: style, text and colours, with a live preview drawn by the server. obj is a channel,
+        // or the plugin configuration for the defaults.
+        function logoLookEditor(obj, isChannel, getName) {
+          var img = el('img', { className: 'ctv-logo-preview', alt: '' });
+          var timer = null;
+          var requestId = 0;
+          var refresh = function () {
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+              var d = state.config;
+              var q = {
+                name: getName() || 'Channel', text: isChannel ? (obj.GeneratedLogoText || '') : '',
+                style: isChannel ? obj.GeneratedLogoStyle : 'Default', color: isChannel ? (obj.GeneratedLogoColor || '') : '',
+                textColor: isChannel ? (obj.GeneratedLogoTextColor || '') : '', defaultStyle: d.GeneratedLogoStyle || 'Default',
+                defaultColor: d.GeneratedLogoColor || '', defaultTextColor: d.GeneratedLogoTextColor || ''
+              };
+              var url = ApiClient.getUrl('CableTv/LogoPreview') + '?' + Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
+              var mine = ++requestId;
+              // Drawn by the server for administrators only, so fetched with the token rather than set as the image address.
+              fetch(url, { headers: { 'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"' } })
+                .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.blob(); })
+                .then(function (blob) { if (mine === requestId) { img.style.display = ''; img.src = URL.createObjectURL(blob); } })
+                .catch(function () { img.style.display = 'none'; });
+            }, 250);
+          };
+          obj.GeneratedLogoStyle = obj.GeneratedLogoStyle || 'Default';
+          var styles = [['Default', isChannel ? 'Same as the other channels' : 'Plate'], ['Plate', 'Plate with gradient'], ['Flat', 'Flat plate'], ['Outline', 'Outline'], ['TextOnly', 'Text only']];
+          var box = el('div', {}, [
+            el('div', { className: 'ctv-row' }, [
+              field('Style', select(obj, 'GeneratedLogoStyle', styles, refresh)),
+              isChannel ? field('Text (empty draws the name)', textInput(obj, 'GeneratedLogoText', 'e.g. a short form of the name', refresh)) : null,
+              field('Colour', colorInput(obj, 'GeneratedLogoColor', refresh)),
+              field('Text colour', colorInput(obj, 'GeneratedLogoTextColor', refresh)),
+              img
+            ])
+          ]);
+          refresh();
+          return box;
+        }
+
+        function uploadLogo(channel, urlInput, preview, message) {
+          var file = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp' });
+          file.style.display = 'none';
+          var button = el('button', { type: 'button', className: 'raised', text: 'Upload image…' });
+          var remove = el('button', { type: 'button', className: 'raised', text: 'Remove logo' });
+          button.addEventListener('click', function () { file.click(); });
+          remove.addEventListener('click', function () {
+            channel.LogoUrl = ''; urlInput.value = ''; preview.style.display = 'none';
+            message.textContent = 'Removed. Save to apply.';
+          });
+          file.addEventListener('change', function () {
+            var chosen = file.files && file.files[0];
+            if (!chosen) { return; }
+            if (!channel.Id) { message.textContent = 'Give the channel an Id first.'; return; }
+            if (chosen.size > 2 * 1024 * 1024) { message.textContent = 'That image is over 2 MB.'; return; }
+            message.textContent = 'Uploading…';
+            fetch(ApiClient.getUrl('CableTv/Logo/' + encodeURIComponent(channel.Id)), {
+              method: 'POST',
+              headers: { 'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"', 'Content-Type': chosen.type || 'application/octet-stream' },
+              body: chosen
+            }).then(function (response) {
+              if (!response.ok) { return response.text().then(function (t) { throw new Error(t || ('HTTP ' + response.status)); }); }
+              return response.json();
+            }).then(function (result) {
+              channel.LogoUrl = result.Value || result.value;
+              urlInput.value = channel.LogoUrl;
+              preview.style.display = '';
+              preview.src = URL.createObjectURL(chosen);
+              message.textContent = 'Uploaded. Save to apply.';
+            }).catch(function (e) { message.textContent = 'Upload failed: ' + String(e.message || e).replace(/^"|"$/g, ''); });
+          });
+          return el('div', { className: 'ctv-upload' }, [button, remove, file]);
+        }
+
         function daysPicker(obj, key) {
           obj[key] = obj[key] || [];
           var box = el('div', { className: 'ctv-days' });
@@ -522,6 +621,7 @@
           if (channel.LogoTolerance == null) { channel.LogoTolerance = 24; }
           if (channel.LogoScale == null) { channel.LogoScale = 100; }
           channel.LogoAlign = channel.LogoAlign || 'Center';
+          channel.GeneratedLogoStyle = channel.GeneratedLogoStyle || 'Default';
           channel.Sources = channel.Sources || [];
           channel.CommercialSources = channel.CommercialSources || [];
           channel.TimeSlots = channel.TimeSlots || [];
@@ -585,10 +685,13 @@
           var logo = el('img', { className: 'ctv-logo', alt: '' });
           logo.onerror = function () { logo.style.display = 'none'; };
           logo.src = ApiClient.getUrl('CableTv/Logo/' + encodeURIComponent(channel.Id || 'none')) + '?t=' + Date.now();
+          var logoUrl = textInput(channel, 'LogoUrl', 'automatic');
+          var logoMessage = el('span', { className: 'ctv-hint' });
           basics.appendChild(el('div', { className: 'ctv-row' }, [
-            field('Logo: an image URL, a file path on the server, studio:Network Name, or empty for the network logo or a generated one', textInput(channel, 'LogoUrl', 'automatic'), true),
+            field('Logo: an image URL, a file path on the server, studio:Network Name, or empty for the network logo or a generated one', logoUrl, true),
             logo
           ]));
+          basics.appendChild(el('div', { className: 'ctv-upload' }, [uploadLogo(channel, logoUrl, logo, logoMessage), logoMessage]));
           basics.appendChild(el('div', { className: 'ctv-sub', text: 'Logo options' }));
           basics.appendChild(el('div', { className: 'ctv-row' }, [
             checkbox(channel, 'LogoTransparent', 'Transparent background'),
@@ -597,6 +700,8 @@
             field('Position', select(channel, 'LogoAlign', LOGO_ALIGNS))
           ]));
           basics.appendChild(el('div', { className: 'ctv-hint', text: 'Transparent background removes the plain colour around a logo (the white of a JPEG, say); raise the tolerance for a soft or noisy edge. Size and position apply when the size is below 100%. Save to see the logo change. A generated logo ignores these.' }));
+          var looks = collapsible('Generated logo (used when there is no other logo)', !!(channel.GeneratedLogoText || channel.GeneratedLogoColor || channel.GeneratedLogoTextColor || (channel.GeneratedLogoStyle && channel.GeneratedLogoStyle !== 'Default')));
+          looks.appendChild(logoLookEditor(channel, true, function () { return channel.Name; }));
           basics.appendChild(el('div', { className: 'ctv-sub', text: 'Scheduling' }));
           var types = el('div', { className: 'ctv-days' });
           ITEM_TYPES.forEach(function (t) {
@@ -619,6 +724,7 @@
             checkbox(channel, 'AllowSpecials', 'Include specials (season 0)')
           ]));
           editor.appendChild(basics);
+          editor.appendChild(looks);
 
           // Stream and weather channels have no sources, breaks or slots: just a URL or a place.
           var kindCard = el('div', { className: 'ctv-card' }, [el('h4', { text: 'What it airs' })]);
@@ -769,10 +875,14 @@
             if (ids[c.Id]) { return 'Two channels share the Id ' + c.Id + '.'; }
             ids[c.Id] = true;
             var bad = (c.TimeSlots || []).filter(function (s) { return !/^\d{1,2}:\d{2}$/.test(s.Start) || !/^\d{1,2}:\d{2}$/.test(s.End); });
+            var colours = [c.GeneratedLogoColor, c.GeneratedLogoTextColor];
+            if (colours.some(function (v) { return v && !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim()); })) { return c.Name + ': logo colours must look like #1E88E5.'; }
             if (bad.length) { return c.Name + ': time slot times must look like 07:00.'; }
             var badSeason = (c.Seasons || []).filter(function (s) { return !/^\d{2}-\d{2}$/.test(s.From) || !/^\d{2}-\d{2}$/.test(s.To); });
             if (badSeason.length) { return c.Name + ': season dates must look like 12-01.'; }
           }
+          var globalColours = [state.config.GeneratedLogoColor, state.config.GeneratedLogoTextColor];
+          if (globalColours.some(function (v) { return v && !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim()); })) { return 'Generated logo colours must look like #1E88E5.'; }
           return null;
         }
 
@@ -835,6 +945,12 @@
             page.querySelector('#SubtitleLanguage').value = config.SubtitleLanguage || '';
             page.querySelector('#AudioLanguage').value = config.AudioLanguage || '';
             page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
+            config.GeneratedLogoStyle = config.GeneratedLogoStyle || 'Default';
+            config.GeneratedLogoColor = config.GeneratedLogoColor || '';
+            config.GeneratedLogoTextColor = config.GeneratedLogoTextColor || '';
+            var globalLook = page.querySelector('#GlobalLogoLook');
+            globalLook.innerHTML = '';
+            globalLook.appendChild(logoLookEditor(config, false, function () { return 'Sample'; }));
             page.querySelector('#ServiceName').value = config.ServiceName || '';
             page.querySelector('#ShowInWebMenu').checked = config.ShowInWebMenu !== false;
             page.querySelector('#WebTvLink').href = ApiClient.getUrl('CableTv/Web');
@@ -1185,6 +1301,9 @@
             config.SubtitleLanguage = page.querySelector('#SubtitleLanguage').value.trim();
             config.AudioLanguage = page.querySelector('#AudioLanguage').value.trim();
             config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
+            config.GeneratedLogoStyle = state.config.GeneratedLogoStyle || 'Default';
+            config.GeneratedLogoColor = (state.config.GeneratedLogoColor || '').trim();
+            config.GeneratedLogoTextColor = (state.config.GeneratedLogoTextColor || '').trim();
             config.ServiceName = page.querySelector('#ServiceName').value.trim() || 'Cable TV';
             config.ShowInWebMenu = page.querySelector('#ShowInWebMenu').checked;
             config.ContentGroups = state.config.ContentGroups;

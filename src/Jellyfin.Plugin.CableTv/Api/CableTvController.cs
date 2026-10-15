@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.CableTv.Configuration;
 using Jellyfin.Plugin.CableTv.Content;
+using Jellyfin.Plugin.CableTv.Logos;
 using Jellyfin.Plugin.CableTv.Packs;
 using Jellyfin.Plugin.CableTv.Scheduling;
 using Jellyfin.Plugin.CableTv.LiveTv;
@@ -306,6 +307,95 @@ public class CableTvController : ControllerBase
             _ => "image/png",
         };
         return PhysicalFile(path, type);
+    }
+
+    /// <summary>
+    /// Keeps an image uploaded as a channel's logo. Set the channel's logo to the returned value and save. Administrators only.
+    /// </summary>
+    /// <param name="channelId">Channel id.</param>
+    /// <returns>The logo setting to use (<c>upload:file</c>).</returns>
+    [HttpPost("Logo/{channelId}")]
+    [Authorize(Policy = "RequiresElevation")]
+    [RequestSizeLimit(LogoUpload.MaxBytes + 1024)]
+    [Consumes("image/png", "image/jpeg", "image/gif", "image/webp", "application/octet-stream")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<LogoUploadResponse>> UploadLogo([FromRoute] string channelId)
+    {
+        if (Plugin.Instance is not { } plugin)
+        {
+            return BadRequest("The plugin isn't ready.");
+        }
+
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        int read;
+        while ((read = await Request.Body.ReadAsync(chunk).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > LogoUpload.MaxBytes)
+            {
+                return BadRequest("The image is larger than 2 MB.");
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        var bytes = buffer.ToArray();
+        if (LogoUpload.Detect(bytes) is not { } extension)
+        {
+            return BadRequest("Use a PNG, JPEG, GIF or WebP image.");
+        }
+
+        var hash = StableHash.ToHex(StableHash.Add(StableHash.Start(), Convert.ToHexString(SHA256.HashData(bytes))), 10);
+        var name = Library.TitleNormalizer.Slug(channelId) + "-" + hash + extension;
+        var directory = Path.Combine(plugin.DataFolderPath, "uploads");
+        Directory.CreateDirectory(directory);
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(directory, name), bytes).ConfigureAwait(false);
+        return new LogoUploadResponse(LogoUpload.Prefix + name);
+    }
+
+    /// <summary>
+    /// Draws a generated logo from the settings as edited, for the preview next to the style options. Administrators only.
+    /// </summary>
+    /// <param name="name">Channel name.</param>
+    /// <param name="text">Text to draw instead of the name.</param>
+    /// <param name="style">Channel style.</param>
+    /// <param name="color">Channel colour.</param>
+    /// <param name="textColor">Channel text colour.</param>
+    /// <param name="defaultStyle">Plugin-wide style.</param>
+    /// <param name="defaultColor">Plugin-wide colour.</param>
+    /// <param name="defaultTextColor">Plugin-wide text colour.</param>
+    /// <returns>The PNG.</returns>
+    [HttpGet("LogoPreview")]
+    [Authorize(Policy = "RequiresElevation")]
+    [Produces("image/png")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public ActionResult LogoPreview(
+        [FromQuery] string? name,
+        [FromQuery] string? text,
+        [FromQuery] LogoStyle style,
+        [FromQuery] string? color,
+        [FromQuery] string? textColor,
+        [FromQuery] LogoStyle defaultStyle,
+        [FromQuery] string? defaultColor,
+        [FromQuery] string? defaultTextColor)
+    {
+        var look = Logos.LogoLook.Create(name ?? string.Empty, text, style, color, textColor, defaultStyle, defaultColor, defaultTextColor);
+        if (string.IsNullOrWhiteSpace(look.Text))
+        {
+            look = look with { Text = "CHANNEL" };
+        }
+
+        try
+        {
+            Response.Headers.CacheControl = "no-store";
+            return File(Logos.LogoRenderer.RenderPng(look), "image/png");
+        }
+        catch (Exception ex) when (ex is TypeLoadException or DllNotFoundException or TypeInitializationException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
     }
 
     /// <summary>

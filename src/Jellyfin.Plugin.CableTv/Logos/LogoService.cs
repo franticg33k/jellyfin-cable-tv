@@ -23,10 +23,10 @@ namespace Jellyfin.Plugin.CableTv.Logos;
 public sealed record LogoRef(string? LocalPath, string? RemoteUrl);
 
 /// <summary>
-/// Picks each channel's logo. In order: the channel's own URL or file; "studio:Name"; the configured logo pack
+/// Picks each channel's logo. In order: the channel's own URL, file or upload; "studio:Name"; the configured logo pack
 /// ("{LogoBaseUrl}/{slug}.png"); the logo Jellyfin has for a studio or TV network with the channel's name (downloaded by
 /// its Studio Images plugin); otherwise a generated logo. A channel's logo options (transparent background, size,
-/// position) are applied to whichever image that gives, except a generated logo. No third-party artwork ships with the plugin.
+/// position) are applied to whichever image that gives, except a generated logo, which has its own style options. No third-party artwork ships with the plugin.
 /// </summary>
 public class LogoService
 {
@@ -90,6 +90,16 @@ public class LogoService
             return new LogoRef(logo, null);
         }
 
+        // An image uploaded in the settings, kept in the plugin's data folder.
+        if (!string.IsNullOrEmpty(logo) && logo.StartsWith(LogoUpload.Prefix, StringComparison.OrdinalIgnoreCase) && Plugin.Instance is { } owner)
+        {
+            var uploaded = Path.Combine(owner.DataFolderPath, "uploads", Path.GetFileName(logo[LogoUpload.Prefix.Length..].Trim()));
+            if (File.Exists(uploaded))
+            {
+                return new LogoRef(uploaded, null);
+            }
+        }
+
         if (!string.IsNullOrEmpty(logo) && logo.StartsWith("studio:", StringComparison.OrdinalIgnoreCase)
             && StudioImage(logo["studio:".Length..].Trim()) is { } studioLogo)
         {
@@ -107,7 +117,7 @@ public class LogoService
         }
 
         generated = true;
-        return Generated(channel.Name);
+        return Generated(LookOf(channel, config));
     }
 
     /// <summary>
@@ -203,15 +213,33 @@ public class LogoService
             return path;
         });
 
-    private LogoRef? Generated(string? name)
+    /// <summary>
+    /// The look of a channel's generated logo: its own choices over the plugin-wide ones.
+    /// </summary>
+    /// <param name="channel">Channel.</param>
+    /// <param name="config">Plugin configuration.</param>
+    /// <returns>The look.</returns>
+    public static LogoLook LookOf(ChannelDefinition channel, PluginConfiguration config)
+        => LogoLook.Create(
+            channel.Name,
+            channel.GeneratedLogoText,
+            channel.GeneratedLogoStyle,
+            channel.GeneratedLogoColor,
+            channel.GeneratedLogoTextColor,
+            config.GeneratedLogoStyle,
+            config.GeneratedLogoColor,
+            config.GeneratedLogoTextColor);
+
+    private LogoRef? Generated(LogoLook look)
     {
+        var name = look.Text;
         if (string.IsNullOrWhiteSpace(name) || _renderFailed || Plugin.Instance is not { } plugin)
         {
             return null;
         }
 
         var directory = Path.Combine(plugin.DataFolderPath, "logos");
-        var hash = StableHash.ToHex(StableHash.Add(StableHash.Add(StableHash.Start(), name), LogoRenderer.StyleVersion), 10);
+        var hash = StableHash.ToHex(StableHash.Add(StableHash.Add(StableHash.Start(), look.Key), LogoRenderer.StyleVersion), 10);
         var path = Path.Combine(directory, TitleNormalizer.Slug(name) + "-" + hash + ".png");
         if (File.Exists(path))
         {
@@ -221,7 +249,7 @@ public class LogoService
         try
         {
             Directory.CreateDirectory(directory);
-            var png = LogoRenderer.RenderPng(name);
+            var png = LogoRenderer.RenderPng(look);
             var temp = path + ".tmp";
             File.WriteAllBytes(temp, png);
             File.Move(temp, path, overwrite: true);

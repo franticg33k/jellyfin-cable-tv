@@ -168,12 +168,22 @@ your library has; *Import* saves the result.
 
 ### Logos
 
-Each channel's logo is, in order: its own **Logo** (an image URL, the path of an image file on the server, or
-`studio:Network Name`); the image at `{Logo pack URL}/{channel_name}.png` when a logo pack URL is set
+Each channel's logo is, in order: its own **Logo** (an image URL, the path of an image file on the server, an
+image you upload with **Upload image…** under the Logo field, or `studio:Network Name`); the image at `{Logo pack URL}/{channel_name}.png` when a logo pack URL is set
 (`Cartoon Network` → `cartoon_network.png`, `HBO+` → `hbo_plus.png`); the logo Jellyfin has for a studio or TV network
 with the channel's name (install the **Studio Images** plugin to download network logos); otherwise a generated logo
 with the channel's name. No third-party logos ship with the plugin; a logo pack is any folder of PNGs your server can
 reach, for example a GitHub repository of your own.
+
+**Generated logos.** Under **Settings → General → Generated logos**, choose how every generated logo looks: a plate with a
+gradient (default), a flat plate, an outline, or only the text, plus a colour and a text colour (empty colours are
+chosen from the name, white on plates). A channel can override any of it in its **Generated logo** section, and can
+draw its own text (a short form of a long name). The preview is drawn by the server as you edit. In the JSON these are
+`GeneratedLogoStyle` (`Default`, `Plate`, `Flat`, `Outline`, `TextOnly`), `GeneratedLogoColor`, `GeneratedLogoTextColor`
+and, per channel, `GeneratedLogoText`.
+
+**Uploads.** An uploaded image is stored in the plugin's data folder (`uploads/`) and the channel's Logo becomes
+`upload:file.png`; it goes through the options below like any other logo. The file isn't part of a JSON export.
 
 Per channel, these options (under the Logo field; save to apply) reshape whichever image that is, except a generated
 logo:
@@ -217,7 +227,7 @@ The JSON form of a channel, for reference:
 | `Id` | Stable id. It seeds the schedule, so changing it reshuffles the channel. |
 | `Kind` | `Standard` (default), `Stream` (with `StreamUrl`) or `Weather` (with `WeatherLocation`, `WeatherMetric`). |
 | `Sources` | Union of sources. `Library`, `Collection`, `Playlist`, `Items` take `Ids`. In `Values`: `Genre`, `Studio` (TV networks), `Tag`, `Rating` take names; `Decade` start years (`"1990"`); `Years` years or ranges (`"1985-1994"`); `Keyword` words in the title; `Titles` show or movie titles, optionally `"Title (Year)"`; `Episodes` `"Show :: Episode title"`; `Artist` artist names; `Trailers` movie trailers (optional genres); `Group` content group names; `Rule` a smart filter in `Rule` (see Rule sources). `Exclude: true` removes a source's items from the channel. `Weight` (1–10) airs a source's items more often under `Random`. |
-| `LogoUrl` | Image URL, image file path on the server, `studio:Name`, or empty for automatic (see Logos). `LogoTransparent`, `LogoTolerance`, `LogoScale` and `LogoAlign` reshape it. |
+| `LogoUrl` | Image URL, image file path on the server, `upload:file` (an uploaded image), `studio:Name`, or empty for automatic (see Logos). `LogoTransparent`, `LogoTolerance`, `LogoScale` and `LogoAlign` reshape it. |
 | `Category` | Guide group, for example `Kids`; returned by the API. |
 | `Sorting` | `Random`, `Cyclic`, `RoundRobin` (one episode per series in turn), `Block` (`BlockSize` episodes per series), `Marathon` (whole series back to back, series order reshuffled each pass). |
 | `CommercialsEnabled` | Plan breaks. Commercials come from `CommercialSources`, or the page's global *Commercial sources* when empty (for example a *Home videos* library of ads). |
