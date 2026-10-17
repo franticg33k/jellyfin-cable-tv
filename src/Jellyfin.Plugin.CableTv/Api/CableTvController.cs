@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.CableTv.Configuration;
 using Jellyfin.Plugin.CableTv.Content;
+using Jellyfin.Plugin.CableTv.Library;
 using Jellyfin.Plugin.CableTv.Logos;
 using Jellyfin.Plugin.CableTv.Packs;
 using Jellyfin.Plugin.CableTv.Scheduling;
@@ -51,6 +52,7 @@ public class CableTvController : ControllerBase
     private readonly ChannelSuggester _suggester;
     private readonly Weather.WeatherService _weather;
     private readonly ILibraryManager _libraryManager;
+    private readonly ContentPoolResolver _resolver;
 
     private static readonly System.Text.Json.JsonSerializerOptions WeatherJson = new(System.Text.Json.JsonSerializerDefaults.Web);
 
@@ -64,8 +66,10 @@ public class CableTvController : ControllerBase
     /// <param name="suggester">Channel suggestions.</param>
     /// <param name="weather">Weather forecasts.</param>
     /// <param name="libraryManager">Library manager.</param>
-    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams, PackService packs, ChannelSuggester suggester, Weather.WeatherService weather, ILibraryManager libraryManager)
+    /// <param name="resolver">Pool resolver, for the library index.</param>
+    public CableTvController(ChannelStore store, GuideRefresher refresher, StreamManager streams, PackService packs, ChannelSuggester suggester, Weather.WeatherService weather, ILibraryManager libraryManager, ContentPoolResolver resolver)
     {
+        _resolver = resolver;
         _libraryManager = libraryManager;
         _weather = weather;
         _store = store;
@@ -435,6 +439,72 @@ public class CableTvController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyList<ChannelSuggestion>> GetSuggestions([FromQuery] int minTitles = 3)
         => Ok(_suggester.Suggest(Plugin.Instance?.Configuration ?? new PluginConfiguration(), minTitles));
+
+    /// <summary>
+    /// Searches the library's movies and shows for the channel editor's title picker. Administrators only.
+    /// </summary>
+    /// <param name="search">Words in the title.</param>
+    /// <param name="kind">Comma-separated kinds: Movie, Series, MusicVideo, Video. Empty for movies and shows.</param>
+    /// <param name="genre">Comma-separated genres (any).</param>
+    /// <param name="studio">Comma-separated studios or networks (any).</param>
+    /// <param name="rating">Comma-separated official ratings (any).</param>
+    /// <param name="yearFrom">Earliest year.</param>
+    /// <param name="yearTo">Latest year.</param>
+    /// <param name="minRating">Lowest community rating.</param>
+    /// <param name="sort">Name, Year, Rating or Added.</param>
+    /// <param name="skip">Results to skip.</param>
+    /// <param name="take">Results to return (up to 120).</param>
+    /// <returns>The page and the total number of matches.</returns>
+    [HttpGet("Browse")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<BrowseResponse> Browse(
+        [FromQuery] string? search,
+        [FromQuery] string? kind,
+        [FromQuery] string? genre,
+        [FromQuery] string? studio,
+        [FromQuery] string? rating,
+        [FromQuery] int? yearFrom,
+        [FromQuery] int? yearTo,
+        [FromQuery] float? minRating,
+        [FromQuery] BrowseSort sort = BrowseSort.Name,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 60)
+    {
+        static string[] Split(string? value)
+            => (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var kinds = Split(kind).Select(k => Enum.TryParse<TitleKind>(k, true, out var parsed) ? (TitleKind?)parsed : null)
+            .Where(k => k is not null).Select(k => k!.Value).ToList();
+        var page = LibraryBrowse.Run(
+            _resolver.SharedContext().Index,
+            new BrowseQuery(search, kinds, Split(genre), Split(studio), Split(rating), yearFrom, yearTo, minRating, sort, skip, take));
+        return new BrowseResponse(
+            page.Total,
+            page.Items.Select(t => new BrowseItemDto(
+                t.Id.ToString("N", CultureInfo.InvariantCulture),
+                t.Name,
+                t.Kind.ToString(),
+                t.Year,
+                t.Genres,
+                t.OfficialRating,
+                t.CommunityRating,
+                t.Year is int year ? $"{t.Name} ({year})" : t.Name)).ToList());
+    }
+
+    /// <summary>
+    /// The genres, studios, ratings and years the title picker's filters offer. Administrators only.
+    /// </summary>
+    /// <returns>The filter values.</returns>
+    [HttpGet("BrowseFacets")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<BrowseFacetsResponse> BrowseFacets()
+    {
+        var facets = LibraryBrowse.Facets(_resolver.SharedContext().Index);
+        static List<BrowseFacetDto> Dtos(IEnumerable<KeyValuePair<string, int>> values) => values.Select(p => new BrowseFacetDto(p.Key, p.Value)).ToList();
+        return new BrowseFacetsResponse(Dtos(facets.Genres), Dtos(facets.Studios), Dtos(facets.Ratings), facets.MinYear, facets.MaxYear);
+    }
 
     /// <summary>
     /// Imports a lineup CSV, an episodes CSV or a JSON channel pack. Without <c>apply</c> it only reports what would

@@ -70,6 +70,27 @@
       #CableTvConfigPage .ctv-colour input[type=text] { width: 7.5em; }
       #CableTvConfigPage .ctv-colour input[type=color] { width: 2.6em; height: 2.2em; padding: 0; border: 0; background: none; }
       #CableTvConfigPage .ctv-upload { display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; margin: 0.3em 0; }
+      #CableTvConfigPage .ctv-modal { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; padding: 1em; }
+      #CableTvConfigPage .ctv-picker { background: #1c1c1c; border-radius: 8px; width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
+      #CableTvConfigPage .ctv-picker header { padding: 0.9em 1.1em 0.4em; }
+      #CableTvConfigPage .ctv-picker h4 { margin: 0 0 0.5em; }
+      #CableTvConfigPage .ctv-picker .ctv-filters { display: flex; flex-wrap: wrap; gap: 0.6em; align-items: flex-end; }
+      #CableTvConfigPage .ctv-picker .ctv-filters .ctv-field { min-width: 8em; }
+      #CableTvConfigPage .ctv-picker .ctv-filters input[type=number] { width: 6em; }
+      #CableTvConfigPage .ctv-grid { overflow: auto; flex: 1 1 auto; padding: 0.6em 1.1em; display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5em, 1fr)); gap: 0.7em; align-content: start; min-height: 12em; }
+      #CableTvConfigPage .ctv-tile { position: relative; border-radius: 6px; overflow: hidden; background: #2a2a2a; cursor: pointer; border: 2px solid transparent; display: flex; flex-direction: column; }
+      #CableTvConfigPage .ctv-tile.on { border-color: #00a4dc; }
+      #CableTvConfigPage .ctv-tile.have { opacity: 0.45; cursor: default; }
+      #CableTvConfigPage .ctv-tile .poster { aspect-ratio: 2 / 3; width: 100%; object-fit: cover; background: #333; display: block; }
+      #CableTvConfigPage .ctv-tile .poster-missing { aspect-ratio: 2 / 3; display: flex; align-items: center; justify-content: center; padding: 0.5em; text-align: center; font-size: 0.9em; background: #333; }
+      #CableTvConfigPage .ctv-tile .meta { padding: 0.35em 0.5em 0.5em; font-size: 0.85em; line-height: 1.25; }
+      #CableTvConfigPage .ctv-tile .meta b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #CableTvConfigPage .ctv-tile .meta span { opacity: 0.7; }
+      #CableTvConfigPage .ctv-tile .tick { position: absolute; top: 0.3em; right: 0.3em; background: #00a4dc; color: #fff; border-radius: 50%; width: 1.6em; height: 1.6em; display: none; align-items: center; justify-content: center; font-weight: bold; }
+      #CableTvConfigPage .ctv-tile.on .tick, #CableTvConfigPage .ctv-tile.have .tick { display: flex; }
+      #CableTvConfigPage .ctv-tile.have .tick { background: #666; }
+      #CableTvConfigPage .ctv-picker footer { padding: 0.7em 1.1em; display: flex; gap: 0.6em; align-items: center; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.1); }
+      #CableTvConfigPage .ctv-picker footer .grow { flex: 1 1 auto; opacity: 0.8; }
       #CableTvConfigPage .ctv-suggest { max-height: 30em; overflow: auto; margin: 0.4em 0; }
       #CableTvConfigPage .ctv-suggest h5 { margin: 0.9em 0 0.2em; font-size: 1em; }
       #CableTvConfigPage .ctv-suggest h5 a { font-weight: normal; margin-left: 0.6em; color: inherit; opacity: 0.75; }
@@ -504,6 +525,146 @@
           return b;
         }
 
+        // ---- title picker: search and filter the library, tick movies and shows ----
+        function titlePicker(existing, onAdd) {
+          var have = {};
+          existing.forEach(function (l) { have[l.trim().toLowerCase()] = true; });
+          var chosen = {};
+          var filters = { search: '', Movie: true, Series: true, genre: '', studio: '', rating: '', yearFrom: '', yearTo: '', minRating: '', sort: 'Name' };
+          var loaded = [], total = 0, token = 0, debounce = null;
+          var overlay = el('div', { className: 'ctv-modal' });
+          var grid = el('div', { className: 'ctv-grid' });
+          var count = el('span', { className: 'grow' });
+          var more = button('Load more', function () { load(false); });
+          var addButton = button('Add selected', function () { close(); onAdd(Object.keys(chosen)); });
+          var selects = {};
+
+          function close() { document.removeEventListener('keydown', onKey); overlay.remove(); }
+          function onKey(e) { if (e.key === 'Escape') { close(); } }
+
+          function numberFilter(key, label, placeholder) {
+            var input = el('input', { type: 'number', placeholder: placeholder || '' });
+            input.addEventListener('input', function () { filters[key] = input.value; reload(); });
+            return field(label, input);
+          }
+          function selectFilter(key, label) {
+            var sel = el('select', {});
+            sel.appendChild(el('option', { value: '', text: 'Any' }));
+            sel.addEventListener('change', function () { filters[key] = sel.value; reload(); });
+            selects[key] = sel;
+            return field(label, sel);
+          }
+          function kindChip(key, label) {
+            var input = el('input', { type: 'checkbox' });
+            input.checked = filters[key];
+            input.addEventListener('change', function () {
+              filters[key] = input.checked;
+              if (!filters.Movie && !filters.Series) { filters[key] = true; input.checked = true; }
+              reload();
+            });
+            return el('label', {}, [input, ' ' + label]);
+          }
+
+          var search = el('input', { type: 'text', placeholder: 'Search titles…' });
+          search.addEventListener('input', function () {
+            clearTimeout(debounce);
+            debounce = setTimeout(function () { filters.search = search.value; reload(); }, 250);
+          });
+          var sort = el('select', {});
+          [['Name', 'Title'], ['Year', 'Newest release'], ['Rating', 'Best rated'], ['Added', 'Recently added']].forEach(function (o) { sort.appendChild(el('option', { value: o[0], text: o[1] })); });
+          sort.addEventListener('change', function () { filters.sort = sort.value; reload(); });
+
+          var panel = el('div', { className: 'ctv-picker' }, [
+            el('header', {}, [
+              el('h4', { text: 'Pick movies and shows' }),
+              el('div', { className: 'ctv-filters' }, [
+                field('Search', search, true),
+                el('div', { className: 'ctv-days' }, [kindChip('Movie', 'Movies'), kindChip('Series', 'TV shows')]),
+                selectFilter('genre', 'Genre'),
+                selectFilter('studio', 'Network / studio'),
+                selectFilter('rating', 'Rating'),
+                numberFilter('yearFrom', 'From year'),
+                numberFilter('yearTo', 'To year'),
+                numberFilter('minRating', 'Min score (0-10)'),
+                field('Sort by', sort)
+              ])
+            ]),
+            grid,
+            el('footer', {}, [count, button('Select all shown', selectShown), button('Cancel', close), addButton])
+          ]);
+          overlay.appendChild(panel);
+          overlay.addEventListener('click', function (e) { if (e.target === overlay) { close(); } });
+          document.addEventListener('keydown', onKey);
+          page.appendChild(overlay);
+          search.focus();
+
+          function update() {
+            var n = Object.keys(chosen).length;
+            addButton.textContent = n ? 'Add ' + n + ' selected' : 'Add selected';
+            addButton.disabled = n === 0;
+            count.textContent = loaded.length + ' of ' + total + ' shown' + (n ? ' · ' + n + ' selected' : '');
+            more.style.display = loaded.length < total ? '' : 'none';
+          }
+
+          function tile(item) {
+            var line = item.line;
+            var present = !!have[line.trim().toLowerCase()] || !!have[item.name.trim().toLowerCase()];
+            var node = el('div', { className: 'ctv-tile' + (present ? ' have' : '') + (chosen[line] ? ' on' : ''), title: present ? 'Already on this channel' : item.name });
+            var poster = el('img', { className: 'poster', alt: '', loading: 'lazy' });
+            poster.src = ApiClient.getUrl('Items/' + item.id + '/Images/Primary', { maxHeight: 270, quality: 80 });
+            poster.onerror = function () { poster.replaceWith(el('div', { className: 'poster-missing', text: item.name })); };
+            var bits = [item.kind === 'Series' ? 'TV' : item.kind === 'Movie' ? 'Movie' : item.kind];
+            if (item.year) { bits.push(item.year); }
+            if (item.communityRating) { bits.push('★' + item.communityRating.toFixed(1)); }
+            node.appendChild(poster);
+            node.appendChild(el('div', { className: 'tick', text: '✓' }));
+            node.appendChild(el('div', { className: 'meta' }, [el('b', { text: item.name }), el('span', { text: bits.join(' · ') })]));
+            if (!present) {
+              node.addEventListener('click', function () {
+                if (chosen[line]) { delete chosen[line]; node.classList.remove('on'); } else { chosen[line] = true; node.classList.add('on'); }
+                update();
+              });
+            }
+            return node;
+          }
+
+          function selectShown() {
+            loaded.forEach(function (item) { if (!have[item.line.trim().toLowerCase()] && !have[item.name.trim().toLowerCase()]) { chosen[item.line] = true; } });
+            Array.prototype.forEach.call(grid.querySelectorAll('.ctv-tile:not(.have)'), function (n) { n.classList.add('on'); });
+            update();
+          }
+
+          function query(skip) {
+            var q = { sort: filters.sort, skip: skip, take: 60 };
+            var kinds = ['Movie', 'Series'].filter(function (k) { return filters[k]; });
+            q.kind = kinds.join(',');
+            ['search', 'genre', 'studio', 'rating', 'yearFrom', 'yearTo', 'minRating'].forEach(function (k) { if (filters[k] !== '') { q[k] = filters[k]; } });
+            return q;
+          }
+
+          function reload() { load(true); }
+          function load(reset) {
+            var mine = ++token;
+            if (reset) { loaded = []; grid.innerHTML = ''; }
+            ApiClient.fetch({ url: ApiClient.getUrl('CableTv/Browse', query(loaded.length)), type: 'GET', dataType: 'json' }).then(function (r) {
+              if (mine !== token) { return; }
+              total = r.total;
+              r.items.forEach(function (item) { loaded.push(item); grid.appendChild(tile(item)); });
+              if (reset && !r.items.length) { grid.appendChild(el('p', { className: 'ctv-hint', text: 'Nothing in your library matches.' })); }
+              grid.appendChild(more);
+              update();
+            }).catch(function () { grid.appendChild(el('p', { className: 'ctv-error', text: 'Couldn’t read the library.' })); });
+          }
+
+          ApiClient.fetch({ url: ApiClient.getUrl('CableTv/BrowseFacets'), type: 'GET', dataType: 'json' }).then(function (f) {
+            [['genre', f.genres], ['studio', f.studios], ['rating', f.ratings]].forEach(function (pair) {
+              pair[1].forEach(function (x) { selects[pair[0]].appendChild(el('option', { value: x.name, text: x.name + ' (' + x.count + ')' })); });
+            });
+          });
+          update();
+          load(true);
+        }
+
         // ---- sources editor ----
         function sourceEditor(sources, options) {
           options = options || {};
@@ -542,6 +703,17 @@
                 lines.value = source.Values.join('\n');
                 lines.addEventListener('input', function () { source.Values = splitLines(lines.value); source.Ids = []; });
                 row.appendChild(field(type === 'Titles' ? 'Shows and movies, one per line; add (year) to pick a version' : 'Episodes, one per line: Show :: Episode title', lines, true));
+                if (type === 'Titles') {
+                  row.appendChild(el('div', { className: 'ctv-upload' }, [button('Browse library…', function () {
+                    titlePicker(splitLines(lines.value), function (picked) {
+                      var merged = splitLines(lines.value).concat(picked);
+                      lines.value = merged.join('\n');
+                      source.Values = merged;
+                      source.Ids = [];
+                      lines.rows = Math.min(10, Math.max(3, merged.length + 1));
+                    });
+                  }), el('span', { className: 'ctv-hint', text: 'Search your library, filter by genre, network, rating or year, and tick what to add.' })]));
+                }
               } else if (type === 'Rule') {
                 row.appendChild(ruleEditor(source));
               } else {
