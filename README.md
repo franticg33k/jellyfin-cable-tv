@@ -166,6 +166,14 @@ your library has; *Import* saves the result.
 
 *Export lineup (CSV)* lists what each channel airs, so a lineup can be edited in a spreadsheet and imported back.
 
+### Picking individual titles
+
+To build a channel from hand-picked movies and shows, give it a **Titles** source and press **Browse library…**. The
+picker shows your movies and shows as a poster grid. Search by title, filter by movies or TV, genre, network or studio,
+rating, release years and minimum score, sort by title, newest release, best rated or recently added, tick what you
+want (or **Select all shown**) and **Add selected**. They are added to the Titles list as `Name (Year)`, one per line,
+which you can still edit by hand; titles already on the channel are greyed out.
+
 ### Logos
 
 Each channel's logo is, in order: its own **Logo** (an image URL, the path of an image file on the server, an

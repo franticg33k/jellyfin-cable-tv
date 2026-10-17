@@ -286,3 +286,57 @@ public sealed record SlotDto(
 /// </summary>
 /// <param name="Value">What to set the channel's logo to.</param>
 public sealed record LogoUploadResponse(string Value);
+
+/// <summary>
+/// A movie or show in the library browser.
+/// </summary>
+/// <param name="Id">Jellyfin item id.</param>
+/// <param name="Name">Title.</param>
+/// <param name="Kind">"Movie" or "Series" (or another kind when asked for).</param>
+/// <param name="Year">Production year.</param>
+/// <param name="Genres">Genres.</param>
+/// <param name="OfficialRating">Official rating, for example "TV-PG".</param>
+/// <param name="CommunityRating">Community rating, 0-10.</param>
+/// <param name="Line">The line to put in a channel's Titles list: the name, with the year to tell remakes apart.</param>
+public sealed record BrowseItemDto(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("year")] int? Year,
+    [property: JsonPropertyName("genres")] IReadOnlyList<string> Genres,
+    [property: JsonPropertyName("officialRating")] string? OfficialRating,
+    [property: JsonPropertyName("communityRating")] float? CommunityRating,
+    [property: JsonPropertyName("line")] string Line);
+
+/// <summary>
+/// One page of library browser results.
+/// </summary>
+/// <param name="Total">How many titles match in all.</param>
+/// <param name="Items">The page.</param>
+public sealed record BrowseResponse(
+    [property: JsonPropertyName("total")] int Total,
+    [property: JsonPropertyName("items")] IReadOnlyList<BrowseItemDto> Items);
+
+/// <summary>
+/// A filter value and how many titles have it.
+/// </summary>
+/// <param name="Name">The value.</param>
+/// <param name="Count">Titles with it.</param>
+public sealed record BrowseFacetDto(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("count")] int Count);
+
+/// <summary>
+/// What the library browser's filters offer.
+/// </summary>
+/// <param name="Genres">Genres.</param>
+/// <param name="Studios">Studios and networks.</param>
+/// <param name="Ratings">Official ratings.</param>
+/// <param name="MinYear">Earliest year.</param>
+/// <param name="MaxYear">Latest year.</param>
+public sealed record BrowseFacetsResponse(
+    [property: JsonPropertyName("genres")] IReadOnlyList<BrowseFacetDto> Genres,
+    [property: JsonPropertyName("studios")] IReadOnlyList<BrowseFacetDto> Studios,
+    [property: JsonPropertyName("ratings")] IReadOnlyList<BrowseFacetDto> Ratings,
+    [property: JsonPropertyName("minYear")] int? MinYear,
+    [property: JsonPropertyName("maxYear")] int? MaxYear);
