@@ -296,7 +296,8 @@ Known limits:
   the library changes**; on by default). A scan makes thousands of changes, so they are collected: the rebuild waits until
   nothing has changed for 5 minutes, never runs more than once every 15 minutes, and never waits more than an hour.
 - Between rebuilds, a scheduled file that has been deleted or moved airs as filler (static or a black picture) instead
-  of failing to play, and asks for a rebuild, which drops it. Nothing else in the schedule moves.
+  of failing to play, and asks for a rebuild, which drops it. Nothing else in the schedule moves. This is the setting
+  **Air a deleted or moved file as filler** (`AirMissingFilesAsFiller`, on by default).
 - Weather needs the server to reach `api.open-meteo.com`; without it weather channels show "Forecast unavailable".
 - Stream channels depend on the remote stream; Jellyfin's own clients may transcode them.
 - Jellyfin doesn't show channel categories in its own guide yet; they're available to API clients.

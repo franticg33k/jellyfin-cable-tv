@@ -16,7 +16,7 @@ artifacts:
 changelog: >
   0.12.0.0: channels follow the library: a few minutes after a scan (or any change) settles, channels are rebuilt so new
   episodes and movies join and removed ones leave (a setting; on by default), without waiting for the nightly rebuild.
-  A scheduled file that has been deleted airs as filler instead of failing, and prompts a rebuild.
+  A scheduled file that has been deleted airs as filler instead of failing, and prompts a rebuild (also a setting).
   0.11.1.0: the title picker's poster grid scrolls inside the window and keeps full-size posters when more titles are
   loaded (they were squashed into thin strips).
   0.11.0.0: pick individual movies and shows from a grid of posters: on a Titles source, Browse library… opens a

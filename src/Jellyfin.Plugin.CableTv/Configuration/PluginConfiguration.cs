@@ -103,6 +103,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AutoRebuildOnLibraryChange { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether a scheduled file that no longer exists airs as filler (and prompts a
+    /// rebuild) instead of failing to play.
+    /// </summary>
+    public bool AirMissingFilesAsFiller { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the name clients brand the TV mode with.
     /// </summary>
     public string ServiceName { get; set; } = "Cable TV";

@@ -302,8 +302,10 @@ public class ChannelStore
             SubtitleLanguage = config.SubtitleLanguage ?? string.Empty,
             AudioLanguage = config.AudioLanguage ?? string.Empty,
         };
-        // A file deleted since the last rebuild airs as filler, and asks for a rebuild that drops it.
-        var available = new AvailableTimeline(timeline, System.IO.File.Exists, _ => _signal.Raise());
-        return new ChannelSnapshot(definition, available, stream) { Commercials = commercials };
+        // A file deleted since the last rebuild airs as filler, and asks for a rebuild that drops it (a setting).
+        IChannelTimeline aired = config.AirMissingFilesAsFiller
+            ? new AvailableTimeline(timeline, System.IO.File.Exists, _ => _signal.Raise())
+            : timeline;
+        return new ChannelSnapshot(definition, aired, stream) { Commercials = commercials };
     }
 }
