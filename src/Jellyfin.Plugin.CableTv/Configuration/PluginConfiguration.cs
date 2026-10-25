@@ -97,6 +97,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public string GeneratedLogoTextColor { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the channels are rebuilt a few minutes after the library stops changing
+    /// (new items join their channels, removed ones leave), instead of only at the nightly rebuild.
+    /// </summary>
+    public bool AutoRebuildOnLibraryChange { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the name clients brand the TV mode with.
     /// </summary>
     public string ServiceName { get; set; } = "Cable TV";

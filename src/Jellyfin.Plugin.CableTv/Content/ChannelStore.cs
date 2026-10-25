@@ -22,6 +22,7 @@ public class ChannelStore
     private readonly ContentPoolResolver _resolver;
     private readonly LogoService _logos;
     private readonly ILogger<ChannelStore> _logger;
+    private readonly ChangeSignal _signal;
     private readonly Lock _rebuildLock = new();
     private IReadOnlyList<ChannelSnapshot>? _channels;
     private Dictionary<string, ChannelSnapshot> _byId = new(StringComparer.OrdinalIgnoreCase);
@@ -31,11 +32,13 @@ public class ChannelStore
     /// </summary>
     /// <param name="resolver">Pool resolver.</param>
     /// <param name="logos">Logo service.</param>
+    /// <param name="signal">Raised when a scheduled file turns out to be missing.</param>
     /// <param name="logger">Logger.</param>
-    public ChannelStore(ContentPoolResolver resolver, LogoService logos, ILogger<ChannelStore> logger)
+    public ChannelStore(ContentPoolResolver resolver, LogoService logos, ChangeSignal signal, ILogger<ChannelStore> logger)
     {
         _resolver = resolver;
         _logos = logos;
+        _signal = signal;
         _logger = logger;
     }
 
@@ -299,6 +302,8 @@ public class ChannelStore
             SubtitleLanguage = config.SubtitleLanguage ?? string.Empty,
             AudioLanguage = config.AudioLanguage ?? string.Empty,
         };
-        return new ChannelSnapshot(definition, timeline, stream) { Commercials = commercials };
+        // A file deleted since the last rebuild airs as filler, and asks for a rebuild that drops it.
+        var available = new AvailableTimeline(timeline, System.IO.File.Exists, _ => _signal.Raise());
+        return new ChannelSnapshot(definition, available, stream) { Commercials = commercials };
     }
 }

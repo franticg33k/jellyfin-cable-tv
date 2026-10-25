@@ -210,6 +210,9 @@
           <div class="ctv-sub">Generated logos</div>
           <div class="ctv-hint">Channels with no logo of their own get a generated one. Set how they look by default; a channel can still choose its own.</div>
           <div id="GlobalLogoLook"></div>
+          <div class="ctv-row">
+            <label class="ctv-check"><input type="checkbox" id="AutoRebuildOnLibraryChange" /> Rebuild channels a few minutes after the library changes (new items join their channels, removed ones leave). A channel whose content changed reshuffles its schedule.</label>
+          </div>
           <datalist id="ctvZones"></datalist>
           <div class="ctv-row">
             <label class="ctv-field grow"><span>Service name: shown in the TV guide, on the web TV page and in the menu</span>
@@ -1118,6 +1121,7 @@
             page.querySelector('#SubtitleLanguage').value = config.SubtitleLanguage || '';
             page.querySelector('#AudioLanguage').value = config.AudioLanguage || '';
             page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
+            page.querySelector('#AutoRebuildOnLibraryChange').checked = config.AutoRebuildOnLibraryChange !== false;
             config.GeneratedLogoStyle = config.GeneratedLogoStyle || 'Default';
             config.GeneratedLogoColor = config.GeneratedLogoColor || '';
             config.GeneratedLogoTextColor = config.GeneratedLogoTextColor || '';
@@ -1474,6 +1478,7 @@
             config.SubtitleLanguage = page.querySelector('#SubtitleLanguage').value.trim();
             config.AudioLanguage = page.querySelector('#AudioLanguage').value.trim();
             config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
+            config.AutoRebuildOnLibraryChange = page.querySelector('#AutoRebuildOnLibraryChange').checked;
             config.GeneratedLogoStyle = state.config.GeneratedLogoStyle || 'Default';
             config.GeneratedLogoColor = (state.config.GeneratedLogoColor || '').trim();
             config.GeneratedLogoTextColor = (state.config.GeneratedLogoTextColor || '').trim();
