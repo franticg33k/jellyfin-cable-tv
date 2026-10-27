@@ -291,7 +291,13 @@ Known limits:
 - In copy mode, tuning in mid-programme starts at the keyframe before the scheduled point (usually 1–5 s early).
 - Jellyfin waits for a few HLS segments before playback starts, so tune-in takes a few seconds to ~20 s
   depending on the source's keyframe spacing.
-- A rebuild that finds new or removed content reshuffles that channel.
+- A rebuild that finds new or removed content reshuffles that channel. Channels are rebuilt on saving the settings, nightly
+  at 4:00, and a few minutes after the library stops changing (**Settings → General → Rebuild channels a few minutes after
+  the library changes**; on by default). A scan makes thousands of changes, so they are collected: the rebuild waits until
+  nothing has changed for 5 minutes, never runs more than once every 15 minutes, and never waits more than an hour.
+- Between rebuilds, a scheduled file that has been deleted or moved airs as filler (static or a black picture) instead
+  of failing to play, and asks for a rebuild, which drops it. Nothing else in the schedule moves. This is the setting
+  **Air a deleted or moved file as filler** (`AirMissingFilesAsFiller`, on by default).
 - Weather needs the server to reach `api.open-meteo.com`; without it weather channels show "Forecast unavailable".
 - Stream channels depend on the remote stream; Jellyfin's own clients may transcode them.
 - Jellyfin doesn't show channel categories in its own guide yet; they're available to API clients.
