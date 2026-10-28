@@ -51,9 +51,9 @@ internal sealed class ChannelBroadcaster : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private Task? _producer;
 
-    private readonly Func<ChannelSnapshot, CancellationToken, Task<string?>> _stillFor;
+    private readonly Func<ChannelSnapshot, ScheduledSlot, CancellationToken, Task<string?>> _stillFor;
 
-    public ChannelBroadcaster(string channelId, ChannelStore store, string ffmpegPath, Func<ChannelSnapshot, CancellationToken, Task<string?>> stillFor, ILogger logger)
+    public ChannelBroadcaster(string channelId, ChannelStore store, string ffmpegPath, Func<ChannelSnapshot, ScheduledSlot, CancellationToken, Task<string?>> stillFor, ILogger logger)
     {
         _channelId = channelId;
         _stillFor = stillFor;
@@ -176,7 +176,10 @@ internal sealed class ChannelBroadcaster : IAsyncDisposable
                 }
 
                 // A generated slot (weather) airs as a still card drawn by the server.
-                var still = slot.Kind == SlotKind.Generated ? await _stillFor(channel, cancellationToken).ConfigureAwait(false) : null;
+                // A still card airs for a generated slot (weather) and, when there is something to announce, for filler.
+                var still = slot.Kind == SlotKind.Generated || (slot.Kind == SlotKind.Filler && slot.Item is null)
+                    ? await _stillFor(channel, slot, cancellationToken).ConfigureAwait(false)
+                    : null;
                 if (slot.Kind == SlotKind.Generated)
                 {
                     // Redraw at least every five minutes, so a changed forecast shows.

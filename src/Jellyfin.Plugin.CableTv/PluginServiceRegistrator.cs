@@ -27,6 +27,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ChangeSignal>();
         serviceCollection.AddSingleton<ChannelStore>();
         serviceCollection.AddSingleton<GuideRefresher>();
+        serviceCollection.AddSingleton<PromoStills>();
         serviceCollection.AddSingleton<StreamManager>();
         serviceCollection.AddSingleton<CommercialCache>();
         serviceCollection.AddSingleton<ILiveTvService, CableTvLiveTvService>();

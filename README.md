@@ -166,6 +166,17 @@ your library has; *Import* saves the result.
 
 *Export lineup (CSV)* lists what each channel airs, so a lineup can be edited in a spreadsheet and imported back.
 
+### Promo cards between programmes
+
+During a break or a gap between programmes, the Live TV stream (and web TV) shows a card instead of a black screen:
+**Coming up next** with the next programme and its time, and every third break (when a movie airs within the next ten
+hours) **Tonight at 8:00 PM** / **Later today** / **Tomorrow at …** with the movie, its year, rating and length. A break in
+the middle of a programme announces what follows that programme. Gaps shorter than eight seconds stay plain filler. The
+cards are drawn by the server in the style of the weather card and cached in the plugin's data folder.
+
+Settings → General → **Between programmes** turns them off (`PromoCards`). Apps that play the schedule themselves,
+such as the Wholphin fork, show their own break screens.
+
 ### Picking individual titles
 
 To build a channel from hand-picked movies and shows, give it a **Titles** source and press **Browse library…**. The

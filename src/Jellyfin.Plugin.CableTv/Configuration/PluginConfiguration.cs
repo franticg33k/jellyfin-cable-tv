@@ -109,6 +109,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AirMissingFilesAsFiller { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether breaks and gaps between programmes in the Live TV stream show a
+    /// "Coming up next" or "Tonight at 8:00 PM" card instead of a black screen.
+    /// </summary>
+    public bool PromoCards { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the name clients brand the TV mode with.
     /// </summary>
     public string ServiceName { get; set; } = "Cable TV";

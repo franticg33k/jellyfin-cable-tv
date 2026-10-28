@@ -26,6 +26,7 @@ public sealed class StreamManager : IAsyncDisposable
     private readonly ILogger<StreamManager> _logger;
     private readonly Lock _lock = new();
     private readonly Weather.WeatherService _weather;
+    private readonly PromoStills _promos;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StreamManager"/> class.
@@ -33,9 +34,11 @@ public sealed class StreamManager : IAsyncDisposable
     /// <param name="store">Channel store.</param>
     /// <param name="mediaEncoder">Media encoder, for the server's ffmpeg path.</param>
     /// <param name="weather">Weather service, for weather channels' forecast cards.</param>
+    /// <param name="promos">Promo cards for breaks and gaps.</param>
     /// <param name="logger">Logger.</param>
-    public StreamManager(ChannelStore store, IMediaEncoder mediaEncoder, Weather.WeatherService weather, ILogger<StreamManager> logger)
+    public StreamManager(ChannelStore store, IMediaEncoder mediaEncoder, Weather.WeatherService weather, PromoStills promos, ILogger<StreamManager> logger)
     {
+        _promos = promos;
         _store = store;
         _weather = weather;
         _mediaEncoder = mediaEncoder;
@@ -53,7 +56,7 @@ public sealed class StreamManager : IAsyncDisposable
         {
             if (!_broadcasters.TryGetValue(channelId, out var broadcaster) || broadcaster.IsStopped)
             {
-                broadcaster = new ChannelBroadcaster(channelId, _store, _mediaEncoder.EncoderPath, (c, ct) => _weather.CardAsync(c.Definition, ct), _logger);
+                broadcaster = new ChannelBroadcaster(channelId, _store, _mediaEncoder.EncoderPath, (c, slot, ct) => slot.Kind == Scheduling.SlotKind.Generated ? _weather.CardAsync(c.Definition, ct) : _promos.StillAsync(c, slot, ct), _logger);
                 _broadcasters[channelId] = broadcaster;
             }
 
