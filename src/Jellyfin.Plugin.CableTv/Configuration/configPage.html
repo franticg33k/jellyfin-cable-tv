@@ -217,6 +217,10 @@
           <div class="ctv-row">
             <label class="ctv-check"><input type="checkbox" id="AirMissingFilesAsFiller" /> Air a deleted or moved file as filler (static or black) instead of failing to play, until the next rebuild drops it. Off: the slot tries to play and fails.</label>
           </div>
+          <div class="ctv-sub">Between programmes</div>
+          <div class="ctv-row">
+            <label class="ctv-check"><input type="checkbox" id="PromoCards" /> Show a "Coming up next" or "Tonight at 8:00 PM" card during breaks and gaps in the Live TV stream and web TV, instead of a black screen. (Apps that play the schedule themselves, such as the fork, draw their own.)</label>
+          </div>
           <datalist id="ctvZones"></datalist>
           <div class="ctv-row">
             <label class="ctv-field grow"><span>Service name: shown in the TV guide, on the web TV page and in the menu</span>
@@ -1126,6 +1130,7 @@
             page.querySelector('#AudioLanguage').value = config.AudioLanguage || '';
             page.querySelector('#LogoBaseUrl').value = config.LogoBaseUrl || '';
             page.querySelector('#AutoRebuildOnLibraryChange').checked = config.AutoRebuildOnLibraryChange !== false;
+            page.querySelector('#PromoCards').checked = config.PromoCards !== false;
             page.querySelector('#AirMissingFilesAsFiller').checked = config.AirMissingFilesAsFiller !== false;
             config.GeneratedLogoStyle = config.GeneratedLogoStyle || 'Default';
             config.GeneratedLogoColor = config.GeneratedLogoColor || '';
@@ -1484,6 +1489,7 @@
             config.AudioLanguage = page.querySelector('#AudioLanguage').value.trim();
             config.LogoBaseUrl = page.querySelector('#LogoBaseUrl').value.trim();
             config.AutoRebuildOnLibraryChange = page.querySelector('#AutoRebuildOnLibraryChange').checked;
+            config.PromoCards = page.querySelector('#PromoCards').checked;
             config.AirMissingFilesAsFiller = page.querySelector('#AirMissingFilesAsFiller').checked;
             config.GeneratedLogoStyle = state.config.GeneratedLogoStyle || 'Default';
             config.GeneratedLogoColor = (state.config.GeneratedLogoColor || '').trim();
